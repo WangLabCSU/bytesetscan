@@ -1,0 +1,23 @@
+[package]
+name = "bytesetscan"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.89"
+description = "A high-performance Byte-set membership matching librar"
+license = "MIT"
+readme = "README.md"
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE"]
+keywords = ["shufti", "simd", "search", "bytes"]
+categories = ["algorithms", "text-processing", "no-std"]
+
+[features]
+default = ["std"]
+std = []
+
+[package.metadata.docs.rs]
+all-features = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "debuginfo"
