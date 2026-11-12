@@ -4,6 +4,7 @@
 
 mod backend;
 pub mod shufti;
+pub mod truffle;
 
 pub use self::backend::SimdBackend;
 

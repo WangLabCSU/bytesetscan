@@ -1,4 +1,4 @@
-// Shufti uses backend selection to initialize search dispatch.
+// Automatic matchers use backend selection to initialize search dispatch.
 // Targets with byte atomics share the selected backend.
 
 /// Identifies a search backend.
