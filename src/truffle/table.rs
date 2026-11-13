@@ -160,10 +160,10 @@ mod tests {
 
     // Supply inputs to each constructor test; the caller checks its expected set.
     fn for_each_needle(mut visit: impl FnMut(&[u8])) {
-        // Single-byte inputs cover every byte value, including all ASCII
-        // letters and nonletters, and every position in both table halves.
+        // Duplicate each possible byte to exercise repeated insertion at every
+        // bit position, including all ASCII letters and nonletters.
         for member in 0..=255u8 {
-            let needle = [member];
+            let needle = [member, member];
             visit(&needle);
         }
 
