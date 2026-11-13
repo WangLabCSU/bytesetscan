@@ -46,18 +46,7 @@ pub(super) unsafe fn search<const REVERT: bool>(
                 // mismatch leaves the comparison result unchanged.
                 selected = vmvnq_u8(selected);
             }
-            // Each input byte contributes four identical bits in lane order.
-            // reinterpret changes only the lane view: sixteen 0b00000000/0b11111111 bytes
-            // become eight u16 lanes. SHRN shifts each u16 right by 4 and keeps
-            // its low eight bits, merging a pair of byte flags into two nibbles.
-            // For example, flags [0b11111111, 0b00000000] yield 0b00001111; [0b00000000,
-            // 0b11111111] yield
-            // 0b11110000. Each original byte is now represented by four identical bits.
-            let packed = vshrn_n_u16::<4>(vreinterpretq_u16_u8(selected));
-            // View the eight packed bytes as one u64 and extract lane 0.
-            // The scan divides the selected bit position by 4 to recover the
-            // original byte lane, in both forward and reverse directions.
-            vget_lane_u64::<0>(vreinterpret_u64_u8(packed))
+            selected_mask(selected)
         })
     }
 }
@@ -155,18 +144,7 @@ pub(super) unsafe fn rsearch<const REVERT: bool>(
                 // mismatch leaves the comparison result unchanged.
                 selected = vmvnq_u8(selected);
             }
-            // Each input byte contributes four identical bits in lane order.
-            // reinterpret changes only the lane view: sixteen 0b00000000/0b11111111 bytes
-            // become eight u16 lanes. SHRN shifts each u16 right by 4 and keeps
-            // its low eight bits, merging a pair of byte flags into two nibbles.
-            // For example, flags [0b11111111, 0b00000000] yield 0b00001111; [0b00000000,
-            // 0b11111111] yield
-            // 0b11110000. Each original byte is now represented by four identical bits.
-            let packed = vshrn_n_u16::<4>(vreinterpretq_u16_u8(selected));
-            // View the eight packed bytes as one u64 and extract lane 0.
-            // The scan divides the selected bit position by 4 to recover the
-            // original byte lane, in both forward and reverse directions.
-            vget_lane_u64::<0>(vreinterpret_u64_u8(packed))
+            selected_mask(selected)
         })
     }
 }
@@ -218,5 +196,79 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
         } else {
             len
         }
+    }
+}
+
+// Pack 0b00000000/0b11111111 byte flags into four bits per input byte.
+// Byte i always occupies bits 4*i..4*i+3, regardless of target byte order.
+#[inline(always)]
+unsafe fn selected_mask(selected: uint8x16_t) -> u64 {
+    // SAFETY: the caller establishes NEON support. These operations only
+    // reinterpret, narrow, and extract values already held in registers.
+    let mask = unsafe {
+        // Read each pair of flags as a u16, shift right by four, then keep
+        // its low byte. Each original flag contributes one 0b0000/0b1111
+        // nibble. On little-endian, [0b11111111, 0] becomes 0b00001111;
+        // on big-endian, the same pair becomes 0b11110000.
+        let packed = vshrn_n_u16::<4>(vreinterpretq_u16_u8(selected));
+        vget_lane_u64::<0>(vreinterpret_u64_u8(packed))
+    };
+    #[cfg(target_endian = "big")]
+    {
+        // Big-endian puts the first input flag in the highest nibble of
+        // this u64. Reverse all bits to restore input order: every nibble
+        // contains four identical bits, so reversal preserves its value.
+        // Swapping bytes alone would leave each pair of nibbles reversed.
+        mask.reverse_bits()
+    }
+    #[cfg(target_endian = "little")]
+    {
+        mask
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{rscan, scan, selected_mask, vld1q_u8};
+    use crate::SimdBackend;
+
+    #[test]
+    fn selected_mask_preserves_every_byte_position() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        for position in 0..16 {
+            let mut flags = [0u8; 16];
+            flags[position] = 0b11111111;
+            // SAFETY: NEON is available and all sixteen flags are initialized.
+            let mask = unsafe { selected_mask(vld1q_u8(flags.as_ptr())) };
+            assert_eq!(mask, 0b1111u64 << (position * 4), "byte {position}");
+        }
+    }
+
+    #[test]
+    fn scan_returns_the_first_selected_byte() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        let mut flags = [0u8; 16];
+        flags[2] = 0b11111111;
+        flags[11] = 0b11111111;
+        // SAFETY: NEON is available and the input fills one vector.
+        let actual = unsafe { scan(&flags, |bytes| selected_mask(bytes)) };
+        assert_eq!(actual, 2);
+    }
+
+    #[test]
+    fn rscan_returns_the_last_selected_byte() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        let mut flags = [0u8; 16];
+        flags[2] = 0b11111111;
+        flags[11] = 0b11111111;
+        // SAFETY: NEON is available and the input fills one vector.
+        let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
+        assert_eq!(actual, 11);
     }
 }
