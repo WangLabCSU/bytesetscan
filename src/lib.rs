@@ -3,6 +3,7 @@
 #![deny(unnameable_types, unreachable_pub)]
 
 mod backend;
+pub mod bitset;
 pub mod shufti;
 pub mod truffle;
 

@@ -13,7 +13,7 @@ impl ShuftiTable {
     /// Empty needles are accepted and duplicate bytes are ignored.
     /// Returns `None` if the set cannot be represented. Any set of ASCII bytes
     /// fits; see [choosing a matcher](crate#choosing-a-matcher) for non-ASCII sets.
-    /// Use [`crate::truffle::Truffle`] to accept arbitrary byte sets.
+    /// Use [`crate::truffle::Truffle`] or [`crate::bitset::Bitset`] to accept arbitrary byte sets.
     pub(super) fn new(needle: &[u8]) -> Option<Self> {
         Self::with_case(false, needle)
     }
