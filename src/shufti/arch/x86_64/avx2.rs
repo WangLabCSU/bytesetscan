@@ -84,8 +84,10 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
         }
         // After the first unaligned block, advance to the next boundary.
         // Each iteration classifies one vector.
-        // Advance to the next vector-aligned address after testing the
-        // initial unaligned block. Any overlap contains only rejected bytes.
+        // Masking the low five address bits gives the remainder modulo 32.
+        // 32 - remainder is the distance to the next 32-byte boundary
+        // (32 bytes if already aligned). The initial block was checked,
+        // so any overlap contains only rejected bytes.
         let mut start = 32 - (base as usize & 0b00011111);
         let last = len - 32;
         while start < last {
@@ -204,8 +206,9 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
         }
         // An already aligned end may cause the initial suffix block to be
         // checked again.
-        // Round the exclusive end down to a vector boundary. The initial
-        // suffix scan has already ruled out any bytes skipped by rounding.
+        // The end address's low five bits give its remainder modulo 32.
+        // Subtract that remainder from len to round base + end down to a
+        // 32-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (base.add(len) as usize & 0b00011111);
         // The source compares buf_end with buf + 32 before decrementing.
         while end > 32 {

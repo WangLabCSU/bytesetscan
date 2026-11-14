@@ -62,8 +62,9 @@ pub(super) unsafe fn search512<const REVERT: bool>(
             };
         }
         let mut start = 0;
-        // Read only up to the first aligned boundary. The main loop then uses
-        // aligned vectors; an overlapping final vector covers any suffix.
+        // The low six address bits give the remainder modulo 64. When it is
+        // nonzero, 64 - remainder is the distance to the next 64-byte boundary.
+        // Scan that prefix first; an aligned base starts the main loop at 0.
         let misalignment = base as usize & 0b00111111;
         if misalignment != 0 {
             start = 64 - misalignment;
@@ -86,6 +87,8 @@ pub(super) unsafe fn search512<const REVERT: bool>(
                 return mask.trailing_zeros() as usize;
             }
         }
+        // Subtract the end address's remainder modulo 64 from len. Then
+        // base + aligned_end is the last 64-byte boundary at or before its end.
         let aligned_end = len - (base.add(len) as usize & 0b00111111);
         while start < aligned_end {
             // Load all 64 bytes from the 64-byte-aligned interior position;
@@ -183,8 +186,9 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
             };
         }
 
-        // Peel the unaligned suffix before scanning complete aligned vectors.
-        // Keeping only the suffix lanes avoids reading beyond the slice.
+        // The end address's remainder modulo 64 is the suffix length after
+        // the preceding 64-byte boundary. Scan those bytes before the aligned
+        // loop; enabling only suffix lanes keeps the load inside the slice.
         let suffix = base.add(len) as usize & 0b00111111;
         let mut end = len - suffix;
         if suffix != 0 {
@@ -213,7 +217,10 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
                 return end + (63 - mask.leading_zeros()) as usize;
             }
         }
-        // Stop at the first 64-byte boundary at or after the slice start.
+        // The inner mask gives the start address's remainder modulo 64.
+        // Subtract it from 64 to get the distance to the next boundary.
+        // The outer mask changes 64 to 0 when base is already aligned,
+        // so the reverse loop stops at the boundary at or after base.
         let first = (64 - (base as usize & 0b00111111)) & 0b00111111;
         while end > first {
             end -= 64;

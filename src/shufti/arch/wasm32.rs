@@ -37,14 +37,15 @@ pub(super) fn search<const REVERT: bool>(
                 // zeroing behavior therefore does not participate in classification.
                 u8x16_swizzle(high, u8x16_shr(bytes, 4)),
             );
-            // Broadcast zero and compare each u8 lane: no membership flag
-            // becomes 0b11111111, while a member becomes 0b00000000. These are nonmember flags.
-            let mut selected = u8x16_eq(flags, u8x16_splat(0b00000000));
-            if !REVERT {
-                // Bitwise NOT switches nonmember flags into member flags for find;
-                // mismatch leaves the comparison result unchanged.
-                selected = v128_not(selected);
-            }
+            // Membership flags are zero for nonmembers and nonzero for members.
+            // Each comparison produces 0b11111111 for a selected byte and
+            // 0b00000000 otherwise, so bitmask can extract its top bit.
+            let zero = u8x16_splat(0b00000000);
+            let selected = if REVERT {
+                u8x16_eq(flags, zero) // mismatch: select nonmembers.
+            } else {
+                u8x16_ne(flags, zero) // find: select members.
+            };
             // Pack the top bit of byte lane i into scalar bit i. For 0b11111111/0b00000000
             // flags this is a sixteen-bit result with one bit per input byte.
             i8x16_bitmask(selected)
@@ -69,8 +70,10 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             // The lowest set bit identifies the first selected lane.
             return mask.trailing_zeros() as usize;
         }
-        // Advance to the next vector-aligned address after testing the
-        // initial unaligned block. Any overlap contains only rejected bytes.
+        // Masking the low four address bits gives the remainder modulo 16.
+        // 16 - remainder is the distance to the next 16-byte boundary
+        // (16 bytes if already aligned). The initial block was checked,
+        // so any overlap contains only rejected bytes.
         let mut start = 16 - (base as usize & 0b00001111);
         let last = len - 16;
         while start < last {
@@ -133,14 +136,15 @@ pub(super) fn rsearch<const REVERT: bool>(
                 // zeroing behavior therefore does not participate in classification.
                 u8x16_swizzle(high, u8x16_shr(bytes, 4)),
             );
-            // Broadcast zero and compare each u8 lane: no membership flag
-            // becomes 0b11111111, while a member becomes 0b00000000. These are nonmember flags.
-            let mut selected = u8x16_eq(flags, u8x16_splat(0b00000000));
-            if !REVERT {
-                // Bitwise NOT switches nonmember flags into member flags for find;
-                // mismatch leaves the comparison result unchanged.
-                selected = v128_not(selected);
-            }
+            // Membership flags are zero for nonmembers and nonzero for members.
+            // Each comparison produces 0b11111111 for a selected byte and
+            // 0b00000000 otherwise, so bitmask can extract its top bit.
+            let zero = u8x16_splat(0b00000000);
+            let selected = if REVERT {
+                u8x16_eq(flags, zero) // mismatch: select nonmembers.
+            } else {
+                u8x16_ne(flags, zero) // find: select members.
+            };
             // Pack the top bit of byte lane i into scalar bit i. For 0b11111111/0b00000000
             // flags this is a sixteen-bit result with one bit per input byte.
             i8x16_bitmask(selected)
@@ -168,8 +172,9 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             // Add this block's start to return a position in the original input.
             return last + 15 - mask.leading_zeros() as usize;
         }
-        // Round the exclusive end down to a vector boundary. The initial
-        // suffix scan has already ruled out any bytes skipped by rounding.
+        // The end address's low four bits give its remainder modulo 16.
+        // Subtract that remainder from len to round base + end down to a
+        // 16-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (base.add(len) as usize & 0b00001111);
         while end > 16 {
             end -= 16;

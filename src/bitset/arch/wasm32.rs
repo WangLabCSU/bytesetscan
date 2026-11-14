@@ -15,9 +15,22 @@ pub(super) fn search<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> us
         let lower = v128_load(ptr.cast());
         let upper = v128_load(ptr.add(16).cast());
         let bit_masks = u8x16(
-            0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000,
-            0b10000000, 0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000,
-            0b01000000, 0b10000000,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            1 << 7,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            1 << 7,
         );
         scan::<16>(haystack, |ptr| {
             // v128_load accepts unaligned addresses and keeps byte lane order.
@@ -39,9 +52,22 @@ pub(super) fn rsearch<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> u
         let lower = v128_load(ptr.cast());
         let upper = v128_load(ptr.add(16).cast());
         let bit_masks = u8x16(
-            0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000,
-            0b10000000, 0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000,
-            0b01000000, 0b10000000,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            1 << 7,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            1 << 7,
         );
         rscan::<16>(haystack, |ptr| {
             // v128_load accepts unaligned addresses and keeps byte lane order.
@@ -62,13 +88,14 @@ fn mask16<const REVERT: bool>(lower: v128, upper: v128, bit_masks: v128, bytes: 
     );
     // b & 7 selects the single bit representing this byte in its table entry.
     let bit = u8x16_swizzle(bit_masks, v128_and(bytes, u8x16_splat(0b00000111)));
-    let absent = u8x16_eq(v128_and(entry, bit), u8x16_splat(0));
-    // Bitmask extracts the highest bit of each comparison lane in input order.
-    // Its u16 type limits inversion to the sixteen valid lane positions.
-    let absent = i8x16_bitmask(absent);
-    if REVERT {
-        absent
+    let flags = v128_and(entry, bit);
+    let zero = u8x16_splat(0b00000000);
+    // Each selected byte becomes 0b11111111; all other bytes become 0b00000000.
+    let selected = if REVERT {
+        u8x16_eq(flags, zero) // mismatch: select nonmembers.
     } else {
-        !absent
-    }
+        u8x16_ne(flags, zero) // find: select members.
+    };
+    // Bitmask extracts the highest bit of each comparison lane in input order.
+    i8x16_bitmask(selected)
 }

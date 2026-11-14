@@ -22,22 +22,22 @@ pub(in super::super) unsafe fn bitset_avx512<const REVERT: bool>(
         let lower = _mm512_broadcast_i32x4(_mm_loadu_si128(bits.as_ptr().cast()));
         let upper = _mm512_broadcast_i32x4(_mm_loadu_si128(bits.as_ptr().add(2).cast()));
         let bit_masks = _mm512_broadcast_i32x4(_mm_setr_epi8(
-            0b00000001,
-            0b00000010,
-            0b00000100,
-            0b00001000,
-            0b00010000,
-            0b00100000,
-            0b01000000,
-            0b10000000u8 as i8,
-            0b00000001,
-            0b00000010,
-            0b00000100,
-            0b00001000,
-            0b00010000,
-            0b00100000,
-            0b01000000,
-            0b10000000u8 as i8,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            (1u8 << 7) as i8,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            (1u8 << 7) as i8,
         ));
         scan::<64>(haystack, |ptr| {
             // The scanner guarantees a complete 64-byte block; no alignment
@@ -64,22 +64,22 @@ pub(in super::super) unsafe fn rbitset_avx512<const REVERT: bool>(
         let lower = _mm512_broadcast_i32x4(_mm_loadu_si128(bits.as_ptr().cast()));
         let upper = _mm512_broadcast_i32x4(_mm_loadu_si128(bits.as_ptr().add(2).cast()));
         let bit_masks = _mm512_broadcast_i32x4(_mm_setr_epi8(
-            0b00000001,
-            0b00000010,
-            0b00000100,
-            0b00001000,
-            0b00010000,
-            0b00100000,
-            0b01000000,
-            0b10000000u8 as i8,
-            0b00000001,
-            0b00000010,
-            0b00000100,
-            0b00001000,
-            0b00010000,
-            0b00100000,
-            0b01000000,
-            0b10000000u8 as i8,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            (1u8 << 7) as i8,
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            (1u8 << 7) as i8,
         ));
         rscan::<64>(haystack, |ptr| {
             // The scanner guarantees a complete 64-byte block; no alignment
@@ -113,11 +113,13 @@ unsafe fn mask64<const REVERT: bool>(
         bit_masks,
         _mm512_and_si512(bytes, _mm512_set1_epi8(0b00000111)),
     );
-    let absent = _mm512_cmpeq_epi8_mask(_mm512_and_si512(entry, bit), _mm512_setzero_si512());
+    let flags = _mm512_and_si512(entry, bit);
+    let zero = _mm512_setzero_si512();
+    // Each comparison sets scalar bit i exactly when byte lane i is selected.
     if REVERT {
-        absent
+        _mm512_cmpeq_epi8_mask(flags, zero) // mismatch: select nonmembers.
     } else {
-        !absent
+        _mm512_cmpneq_epi8_mask(flags, zero) // find: select members.
     }
 }
 

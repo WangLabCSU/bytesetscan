@@ -62,8 +62,9 @@ pub(super) unsafe fn search512<const REVERT: bool>(
             };
         }
         let mut start = 0;
-        // Read only up to the first aligned boundary. The main loop then uses
-        // aligned vectors; an overlapping final vector covers any suffix.
+        // The low six address bits give the remainder modulo 64. When it is
+        // nonzero, 64 - remainder is the distance to the next 64-byte boundary.
+        // Scan that prefix first; an aligned base starts the main loop at 0.
         let misalignment = base as usize & 0b00111111;
         if misalignment != 0 {
             start = 64 - misalignment;
@@ -196,8 +197,9 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
             // Add this block's start to return a position in the original input.
             return last + (63 - mask.leading_zeros()) as usize;
         }
-        // Round the exclusive end down to a vector boundary. The initial
-        // suffix scan has already ruled out any bytes skipped by rounding.
+        // The end address's low six bits give its remainder modulo 64.
+        // Subtract that remainder from len to round base + end down to a
+        // 64-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (base.add(len) as usize & 0b00111111);
         while end > 64 {
             end -= 64;

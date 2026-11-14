@@ -61,15 +61,21 @@ unsafe fn mask16<const REVERT: bool>(table: uint8x16x2_t, bytes: uint8x16_t) -> 
     if REVERT {
         selected = vmvnq_u8(selected);
     }
-    // Weight the eight flags in each half by 1,2,...,128, then sum them.
+    // Weight flag i in each eight-byte half by 1 << i, then sum them.
     // The two sums give bits 0..7 and 8..15 without relying on endian-specific
     // byte-to-u64 reinterpretation. Their maximum sum is 255.
     // SAFETY: the local array contains all eight initialized weight bytes.
     let weights = unsafe {
         vld1_u8(
             [
-                0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000, 0b01000000,
-                0b10000000,
+                1 << 0,
+                1 << 1,
+                1 << 2,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                1 << 7,
             ]
             .as_ptr(),
         )

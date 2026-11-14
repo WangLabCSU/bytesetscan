@@ -75,8 +75,10 @@ pub(super) unsafe fn search128<const REVERT: bool>(
         }
         // After the first unaligned block, advance to the next boundary.
         // Each iteration classifies one vector.
-        // Advance to the next vector-aligned address after testing the
-        // initial unaligned block. Any overlap contains only rejected bytes.
+        // Masking the low four address bits gives the remainder modulo 16.
+        // 16 - remainder is the distance to the next 16-byte boundary
+        // (16 bytes if already aligned). The initial block was checked,
+        // so any overlap contains only rejected bytes.
         let mut start = 16 - (base as usize & 0b00001111);
         let last = len - 16;
         while start < last {
@@ -187,8 +189,9 @@ pub(super) unsafe fn rsearch128<const REVERT: bool>(
         }
         // An already aligned end may cause the initial suffix block to be
         // checked again.
-        // Round the exclusive end down to a vector boundary. The initial
-        // suffix scan has already ruled out any bytes skipped by rounding.
+        // The end address's low four bits give its remainder modulo 16.
+        // Subtract that remainder from len to round base + end down to a
+        // 16-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (base.add(len) as usize & 0b00001111);
         // The source compares buf_end with buf + 16 before decrementing.
         while end > 16 {
