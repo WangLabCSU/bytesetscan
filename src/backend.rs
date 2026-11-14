@@ -37,7 +37,7 @@ pub enum SimdBackend {
 }
 
 impl SimdBackend {
-    /// Selects a supported backend for the current environment.
+    /// Creates the highest-priority backend supported by the current environment.
     ///
     /// Returns [`Self::Fallback`] when no SIMD backend is available.
     ///
