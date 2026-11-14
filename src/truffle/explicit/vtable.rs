@@ -68,18 +68,18 @@ impl VTable {
 #[cfg(test)]
 mod tests {
     use super::{TruffleTable, VTable};
-    use crate::tests::{backends, supported_backends};
+    use crate::SimdBackend;
 
     #[test]
     fn new_accepts_available_backends() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             assert!(VTable::new(backend).is_some(), "{backend:?}");
         }
     }
 
     #[test]
     fn new_rejects_unavailable_backends() {
-        for backend in backends().filter(|b| !b.is_available()) {
+        for backend in SimdBackend::backends().filter(|b| !b.is_available()) {
             assert!(VTable::new(backend).is_none(), "{backend:?}");
         }
     }

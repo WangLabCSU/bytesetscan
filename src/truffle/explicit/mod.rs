@@ -152,11 +152,11 @@ mod tests {
     use std::{vec, vec::Vec};
 
     use super::TruffleEngine;
-    use crate::tests::supported_backends;
+    use crate::SimdBackend;
 
     #[test]
     fn find_returns_the_first_member() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             // Both positions qualify; the earlier one must win.
             let mut haystack = [b'!'; 128];
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn find_recognizes_every_byte_value() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let haystack: [u8; 256] = core::array::from_fn(|index| index as u8);
             for member in 0..=255u8 {
                 let matcher = TruffleEngine::new(backend, &[member]).unwrap();
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn find_distinguishes_members_of_a_sparse_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // h << 4 fills the high nibble; adding h fills the low nibble.
             // These isolated members span the whole byte range.
             let needle: Vec<u8> = (0..16).map(|h| (h << 4) + h).collect();
@@ -200,7 +200,7 @@ mod tests {
 
     #[test]
     fn find_distinguishes_nonmembers_of_a_dense_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // Exclude bytes whose high and low nibbles are equal.
             let needle: Vec<u8> = (0..=255u8)
                 .filter(|byte| byte >> 4 != byte & 0b00001111)
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn find_uses_ascii_case_expansion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::with_case(true, backend, b"A").unwrap();
             assert_eq!(matcher.find(b"!a!A!"), Some(1));
         }
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn find_returns_none_for_an_empty_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"").unwrap();
             assert_eq!(matcher.find(b"abc"), None);
         }
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn find_returns_first_position_for_a_full_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let needle: Vec<u8> = (0..=255).collect();
             let matcher = TruffleEngine::new(backend, &needle).unwrap();
             assert_eq!(matcher.find(b"abc"), Some(0));
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn find_ignores_matches_outside_the_slice() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[0]).unwrap();
             // Cover short inputs, vector tails, and every 64-byte alignment.
             for len in 0..=257 {
@@ -265,7 +265,7 @@ mod tests {
         let page = guarded.as_mut_slice();
         // No members: the search must read through the whole slice.
         page.fill(1);
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[0]).unwrap();
             for len in 0..=257 {
                 // Start immediately after the leading guard page.
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn mismatch_returns_the_first_nonmember() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             // Both positions qualify; the earlier one must win.
             let mut haystack = [b'A'; 128];
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn mismatch_recognizes_every_byte_value() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             for member in 0..=255u8 {
                 let matcher = TruffleEngine::new(backend, &[member]).unwrap();
                 let mut haystack = [member; 129];
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn mismatch_distinguishes_members_of_a_sparse_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // h << 4 fills the high nibble; adding h fills the low nibble.
             // These isolated members span the whole byte range.
             let needle: Vec<u8> = (0..16).map(|h| (h << 4) + h).collect();
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn mismatch_distinguishes_nonmembers_of_a_dense_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // Exclude bytes whose high and low nibbles are equal.
             let needle: Vec<u8> = (0..=255u8)
                 .filter(|byte| byte >> 4 != byte & 0b00001111)
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn mismatch_uses_ascii_case_expansion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::with_case(true, backend, b"A").unwrap();
             assert_eq!(matcher.mismatch(b"aA!aA?"), Some(2));
         }
@@ -347,7 +347,7 @@ mod tests {
 
     #[test]
     fn mismatch_returns_first_position_for_an_empty_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"").unwrap();
             assert_eq!(matcher.mismatch(b"abc"), Some(0));
         }
@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn mismatch_returns_none_for_a_full_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let needle: Vec<u8> = (0..=255).collect();
             let matcher = TruffleEngine::new(backend, &needle).unwrap();
             assert_eq!(matcher.mismatch(b"abc"), None);
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn mismatch_ignores_nonmembers_outside_the_slice() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[1]).unwrap();
             // Cover short inputs, vector tails, and every 64-byte alignment.
             for len in 0..=257 {
@@ -392,7 +392,7 @@ mod tests {
         let page = guarded.as_mut_slice();
         // No nonmembers: the search must read through the whole slice.
         page.fill(1);
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[1]).unwrap();
             for len in 0..=257 {
                 // Start immediately after the leading guard page.
@@ -409,7 +409,7 @@ mod tests {
 
     #[test]
     fn rfind_returns_the_last_member() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             // Both positions qualify; the later one must win.
             let mut haystack = [b'!'; 128];
@@ -422,7 +422,7 @@ mod tests {
 
     #[test]
     fn rfind_recognizes_every_byte_value() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let haystack: [u8; 256] = core::array::from_fn(|index| index as u8);
             for member in 0..=255u8 {
                 let matcher = TruffleEngine::new(backend, &[member]).unwrap();
@@ -438,7 +438,7 @@ mod tests {
 
     #[test]
     fn rfind_distinguishes_members_of_a_sparse_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // h << 4 fills the high nibble; adding h fills the low nibble.
             // These isolated members span the whole byte range.
             let needle: Vec<u8> = (0..16).map(|h| (h << 4) + h).collect();
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn rfind_distinguishes_nonmembers_of_a_dense_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // Exclude bytes whose high and low nibbles are equal.
             let needle: Vec<u8> = (0..=255u8)
                 .filter(|byte| byte >> 4 != byte & 0b00001111)
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn rfind_uses_ascii_case_expansion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::with_case(true, backend, b"A").unwrap();
             assert_eq!(matcher.rfind(b"!A!a!"), Some(3));
         }
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn rfind_returns_none_for_an_empty_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"").unwrap();
             assert_eq!(matcher.rfind(b"abc"), None);
         }
@@ -485,7 +485,7 @@ mod tests {
 
     #[test]
     fn rfind_returns_last_position_for_a_full_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let needle: Vec<u8> = (0..=255).collect();
             let matcher = TruffleEngine::new(backend, &needle).unwrap();
             assert_eq!(matcher.rfind(b"abc"), Some(2));
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn rfind_ignores_matches_outside_the_slice() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[0]).unwrap();
             // Cover short inputs, vector tails, and every 64-byte alignment.
             for len in 0..=257 {
@@ -518,7 +518,7 @@ mod tests {
         let page = guarded.as_mut_slice();
         // No members: the search must read through the whole slice.
         page.fill(1);
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[0]).unwrap();
             for len in 0..=257 {
                 // Start immediately after the leading guard page.
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn rmismatch_returns_the_last_nonmember() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             // Both positions qualify; the later one must win.
             let mut haystack = [b'A'; 128];
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn rmismatch_recognizes_every_byte_value() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             for member in 0..=255u8 {
                 let matcher = TruffleEngine::new(backend, &[member]).unwrap();
                 let mut haystack = [member; 129];
@@ -561,7 +561,7 @@ mod tests {
 
     #[test]
     fn rmismatch_distinguishes_members_of_a_sparse_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // h << 4 fills the high nibble; adding h fills the low nibble.
             // These isolated members span the whole byte range.
             let needle: Vec<u8> = (0..16).map(|h| (h << 4) + h).collect();
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn rmismatch_distinguishes_nonmembers_of_a_dense_set() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             // Exclude bytes whose high and low nibbles are equal.
             let needle: Vec<u8> = (0..=255u8)
                 .filter(|byte| byte >> 4 != byte & 0b00001111)
@@ -592,7 +592,7 @@ mod tests {
 
     #[test]
     fn rmismatch_uses_ascii_case_expansion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::with_case(true, backend, b"A").unwrap();
             assert_eq!(matcher.rmismatch(b"?Aa!Aa"), Some(3));
         }
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn rmismatch_returns_last_position_for_an_empty_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"").unwrap();
             assert_eq!(matcher.rmismatch(b"abc"), Some(2));
         }
@@ -608,7 +608,7 @@ mod tests {
 
     #[test]
     fn rmismatch_returns_none_for_a_full_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let needle: Vec<u8> = (0..=255).collect();
             let matcher = TruffleEngine::new(backend, &needle).unwrap();
             assert_eq!(matcher.rmismatch(b"abc"), None);
@@ -617,7 +617,7 @@ mod tests {
 
     #[test]
     fn rmismatch_ignores_nonmembers_outside_the_slice() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[1]).unwrap();
             // Cover short inputs, vector tails, and every 64-byte alignment.
             for len in 0..=257 {
@@ -645,7 +645,7 @@ mod tests {
         let page = guarded.as_mut_slice();
         // No nonmembers: the search must read through the whole slice.
         page.fill(1);
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, &[1]).unwrap();
             for len in 0..=257 {
                 // Start immediately after the leading guard page.
@@ -662,7 +662,7 @@ mod tests {
 
     #[test]
     fn finder_uses_the_engines_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             assert!(matcher.finder(b"!A?b!").eq([1, 3]));
         }
@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn mismatcher_uses_the_engines_needle() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = TruffleEngine::new(backend, b"Ab").unwrap();
             assert!(matcher.mismatcher(b"!A?b!").eq([0, 2, 4]));
         }

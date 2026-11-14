@@ -195,11 +195,11 @@ mod tests {
     use std::vec::Vec;
 
     use super::{ShuftiEngine, ShuftiEngineFinder, ShuftiEngineMismatcher};
-    use crate::tests::supported_backends;
+    use crate::SimdBackend;
 
     #[test]
     fn finder_next_yields_ascending_indices() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'!'; 130];
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn finder_next_stays_exhausted() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineFinder::new(&matcher, b"!A!");
             assert_eq!(iter.next(), Some(1));
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn finder_next_back_yields_descending_indices() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'!'; 130];
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn finder_next_back_stays_exhausted() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineFinder::new(&matcher, b"!A!");
             assert_eq!(iter.next_back(), Some(1));
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn finder_size_hint_bounds_the_remaining_results() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineFinder::new(&matcher, b"A!A!A");
             // Exactly three results remain initially; each next() consumes one.
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn finder_size_hint_is_zero_after_exhaustion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineFinder::new(&matcher, b"!A!");
             while iter.next().is_some() {}
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn finder_next_and_next_back_share_the_remaining_range() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'!'; 130];
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn finder_next_is_exhausted_after_next_back() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineFinder::new(&matcher, b"!A!");
             while iter.next_back().is_some() {}
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn finder_returns_no_indices_without_a_match() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let iter = ShuftiEngineFinder::new(&matcher, b"!!!");
             assert_eq!(iter.collect::<Vec<_>>(), []);
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn finder_next_yields_every_position_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn finder_next_back_yields_every_position_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn finder_next_keeps_spaced_matches_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn finder_next_back_keeps_spaced_matches_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_yields_ascending_indices() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'A'; 130];
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_stays_exhausted() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineMismatcher::new(&matcher, b"A!A");
             assert_eq!(iter.next(), Some(1));
@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_back_yields_descending_indices() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'A'; 130];
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_back_stays_exhausted() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineMismatcher::new(&matcher, b"A!A");
             assert_eq!(iter.next_back(), Some(1));
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn mismatcher_size_hint_bounds_the_remaining_results() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineMismatcher::new(&matcher, b"!A!A!");
             // Exactly three results remain initially; each next() consumes one.
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn mismatcher_size_hint_is_zero_after_exhaustion() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineMismatcher::new(&matcher, b"A!A");
             while iter.next().is_some() {}
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_and_next_back_share_the_remaining_range() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Results on both sides of 64 and 128 exercise several scan blocks.
             let mut haystack = [b'A'; 130];
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_is_exhausted_after_next_back() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let mut iter = ShuftiEngineMismatcher::new(&matcher, b"A!A");
             while iter.next_back().is_some() {}
@@ -524,7 +524,7 @@ mod tests {
 
     #[test]
     fn mismatcher_returns_no_indices_without_a_match() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             let iter = ShuftiEngineMismatcher::new(&matcher, b"AAA");
             assert_eq!(iter.collect::<Vec<_>>(), []);
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_yields_every_position_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -557,7 +557,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_back_yields_every_position_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_keeps_spaced_matches_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn mismatcher_next_back_keeps_spaced_matches_across_block_boundaries() {
-        for backend in supported_backends() {
+        for backend in SimdBackend::backends().filter(SimdBackend::is_available) {
             let matcher = ShuftiEngine::new(backend, b"A").unwrap();
             // Include short inputs and lengths just below, at, and above vector boundaries.
             for len in [

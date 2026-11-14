@@ -13,8 +13,6 @@ pub use self::backend::SimdBackend;
 mod tests {
     extern crate std;
 
-    use crate::backend::SimdBackend;
-
     // One writable page between two inaccessible pages.
     #[cfg(target_os = "linux")]
     pub(crate) struct GuardedPage {
@@ -86,30 +84,5 @@ mod tests {
             // SAFETY: self owns the original mapping address and all three pages.
             assert_eq!(unsafe { libc::munmap(self.mapping, self.page_size * 3) }, 0);
         }
-    }
-
-    pub(crate) fn supported_backends() -> impl Iterator<Item = SimdBackend> {
-        backends().filter(|backend| backend.is_available())
-    }
-
-    pub(crate) fn backends() -> impl Iterator<Item = SimdBackend> {
-        [
-            SimdBackend::Fallback,
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            SimdBackend::Ssse3,
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            SimdBackend::Sse4_2,
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            SimdBackend::Avx2,
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            SimdBackend::Avx512,
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            SimdBackend::Avx512Vbmi,
-            #[cfg(target_arch = "aarch64")]
-            SimdBackend::Neon,
-            #[cfg(target_arch = "wasm32")]
-            SimdBackend::WasmSimd128,
-        ]
-        .into_iter()
     }
 }

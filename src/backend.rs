@@ -1,5 +1,4 @@
 // Automatic matchers use backend selection to initialize search dispatch.
-// Targets with byte atomics share the selected backend.
 
 /// Identifies a search backend.
 ///
@@ -7,10 +6,8 @@
 /// constructed even when the current processor cannot use that backend.
 ///
 /// Uses a `u8` representation, with the size and alignment of `u8`.
-// new() stores the discriminant in AtomicU8 and restores it as this enum.
-// repr(u8) is required for that conversion. Discriminants start at zero for
-// Fallback and follow declaration order after cfg filtering; detect() defines
-// selection priority separately. Keep u8::MAX reserved for an empty cache.
+// Discriminants start at zero for Fallback and follow declaration order after
+// cfg filtering; new() defines selection priority separately.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SimdBackend {
@@ -56,41 +53,6 @@ impl SimdBackend {
     /// ```
     #[inline]
     pub fn new() -> Self {
-        #[cfg(target_has_atomic = "8")]
-        {
-            use core::sync::atomic::{AtomicU8, Ordering};
-
-            // u8::MAX means no backend has been detected yet; zero already denotes
-            // Fallback. This private static only receives valid enum discriminants
-            // after initialization. The byte is the entire shared state, so Relaxed
-            // loads and stores suffice: no other memory is published through it.
-            static BACKEND: AtomicU8 = AtomicU8::new(u8::MAX);
-            let cached = BACKEND.load(Ordering::Relaxed);
-            if cached != u8::MAX {
-                // SAFETY: the initial sentinel has been excluded. The only store
-                // below writes a valid SimdBackend discriminant, and atomic loads
-                // cannot tear. repr(u8) gives Self the same layout as that byte.
-                return unsafe { core::mem::transmute::<u8, Self>(cached) };
-            }
-
-            // Concurrent first callers may repeat detection, but choose the same
-            // supported backend. The cast stores its discriminant for later calls;
-            // no thread waits for another initializer.
-            let backend = Self::detect();
-            BACKEND.store(backend as u8, Ordering::Relaxed);
-            backend
-        }
-        #[cfg(not(target_has_atomic = "8"))]
-        {
-            // AtomicU8 is unavailable on these targets, so repeat the same
-            // availability checks on each call without caching the result.
-            Self::detect()
-        }
-    }
-
-    // Detects the preferred available backend without consulting new()'s cache.
-    #[inline]
-    fn detect() -> Self {
         // Array order defines preference, independently of enum discriminants.
         // is_available() supplies the platform's runtime or target-feature
         // checks. cfg removes backends for other architectures; the explicit
@@ -117,6 +79,42 @@ impl SimdBackend {
             }
         }
         Self::Fallback
+    }
+
+    /// Returns an iterator over all backends defined for the compilation target.
+    ///
+    /// Includes [`Self::Fallback`] and SIMD backends that may be unavailable in
+    /// the current environment. Use [`Self::is_available`] to filter them.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use bytesetscan::SimdBackend;
+    ///
+    /// let available: Vec<_> = SimdBackend::backends()
+    ///     .filter(SimdBackend::is_available)
+    ///     .collect();
+    /// assert!(available.contains(&SimdBackend::Fallback));
+    /// ```
+    pub fn backends() -> impl Iterator<Item = Self> {
+        [
+            Self::Fallback,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Self::Ssse3,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Self::Sse4_2,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Self::Avx2,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Self::Avx512,
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            Self::Avx512Vbmi,
+            #[cfg(target_arch = "aarch64")]
+            Self::Neon,
+            #[cfg(target_arch = "wasm32")]
+            Self::WasmSimd128,
+        ]
+        .into_iter()
     }
 
     /// Returns whether this backend can run in the current environment.
@@ -178,7 +176,7 @@ impl SimdBackend {
             // std validates CPU and OS support, compiler feature implications,
             // and platform restrictions.
             // https://doc.rust-lang.org/src/std_detect/detect/os/x86.rs.html
-            // std caches capabilities; new() separately caches our selection.
+            // std caches processor capabilities used by these checks.
             match self {
                 Self::Fallback => true,
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -223,8 +221,6 @@ impl Default for SimdBackend {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-
     use super::SimdBackend;
 
     // Both builds check each backend before exercising its SIMD kernels.
@@ -232,30 +228,10 @@ mod tests {
     #[test]
     fn new_selects_the_highest_priority_available_backend() {
         let selected = SimdBackend::new();
-        assert_eq!(selected, crate::tests::supported_backends().last().unwrap());
-    }
-
-    // wasm32 does not support spawning threads with its standard library.
-    #[cfg(all(target_has_atomic = "8", not(target_arch = "wasm32")))]
-    #[test]
-    fn new_returns_the_same_backend_across_threads() {
-        use std::sync::Barrier;
-        use std::thread;
-
-        // Compute the expectation without calling new(), so running this test alone
-        // exercises concurrent first calls as well as subsequent cached reads.
-        let expected = crate::tests::supported_backends().last().unwrap();
-        let barrier = Barrier::new(8);
-        thread::scope(|scope| {
-            for _ in 0..8 {
-                let barrier = &barrier;
-                scope.spawn(move || {
-                    barrier.wait();
-                    for _ in 0..128 {
-                        assert_eq!(SimdBackend::new(), expected);
-                    }
-                });
-            }
-        });
+        let expected = SimdBackend::backends()
+            .filter(SimdBackend::is_available)
+            .last()
+            .unwrap();
+        assert_eq!(selected, expected);
     }
 }
