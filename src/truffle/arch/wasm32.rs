@@ -17,27 +17,26 @@ pub(super) fn search<const REVERT: bool>(
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
         // selection happens during this load; the following lookup uses them.
         let upper = v128_load(upper.as_ptr().cast());
-        // Load two repetitions of [0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000,
-        // 0b00100000, 0b01000000, 0b10000000]. The
-        // high nibble h will select the bit 0b00000001 << (h & 0b00000111) from this vector.
+        // Load two copies of [1 << 0, ..., 1 << 7]. The high nibble h
+        // selects the membership bit 1 << (h & 0b00000111).
         let bits = v128_load(
             [
-                0b00000001u8,
-                0b00000010,
-                0b00000100,
-                0b00001000,
-                0b00010000,
-                0b00100000,
-                0b01000000,
-                0b10000000,
-                0b00000001,
-                0b00000010,
-                0b00000100,
-                0b00001000,
-                0b00010000,
-                0b00100000,
-                0b01000000,
-                0b10000000,
+                1u8 << 0,
+                1 << 1,
+                1 << 2,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                1 << 7,
+                1 << 0,
+                1 << 1,
+                1 << 2,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                1 << 7,
             ]
             .as_ptr()
             .cast(),
@@ -167,27 +166,26 @@ pub(super) fn rsearch<const REVERT: bool>(
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
         // selection happens during this load; the following lookup uses them.
         let upper = v128_load(upper.as_ptr().cast());
-        // Load two repetitions of [0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000,
-        // 0b00100000, 0b01000000, 0b10000000]. The
-        // high nibble h will select the bit 0b00000001 << (h & 0b00000111) from this vector.
+        // Load two copies of [1 << 0, ..., 1 << 7]. The high nibble h
+        // selects the membership bit 1 << (h & 0b00000111).
         let bits = v128_load(
             [
-                0b00000001u8,
-                0b00000010,
-                0b00000100,
-                0b00001000,
-                0b00010000,
-                0b00100000,
-                0b01000000,
-                0b10000000,
-                0b00000001,
-                0b00000010,
-                0b00000100,
-                0b00001000,
-                0b00010000,
-                0b00100000,
-                0b01000000,
-                0b10000000,
+                1u8 << 0,
+                1 << 1,
+                1 << 2,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                1 << 7,
+                1 << 0,
+                1 << 1,
+                1 << 2,
+                1 << 3,
+                1 << 4,
+                1 << 5,
+                1 << 6,
+                1 << 7,
             ]
             .as_ptr()
             .cast(),

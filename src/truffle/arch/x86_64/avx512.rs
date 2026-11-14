@@ -244,13 +244,19 @@ unsafe fn mask64(lower: __m128i, upper: __m128i, bytes: __m512i) -> u64 {
         // set1_epi8(0b10000000u8 as i8) repeats the bit pattern 0b10000000 in every byte.
         // This is the shuffle index's zeroing bit, not a signed comparison.
         let top = _mm512_set1_epi8(0b10000000u8 as i8);
-        // set1_epi64[x] repeats the 64-bit constant; in x86 byte order it
-        // contains [0b00000001, 0b00000010, 0b00000100, 0b00001000, 0b00010000, 0b00100000,
-        // 0b01000000, 0b10000000]. Each 16-byte shuffle lane
-        // therefore has two copies. Index h returns 1 << (h & 0b00000111).
-        let bits = _mm512_set1_epi64(
-            0b10000000_01000000_00100000_00010000_00001000_00000100_00000010_00000001u64 as i64,
-        );
+        // Pack [1 << 0, ..., 1 << 7] in x86 little-endian byte order.
+        // Broadcasting the packed u64 gives each 16-byte shuffle lane two
+        // copies of the table; index h returns 1 << (h & 0b00000111).
+        let bits = _mm512_set1_epi64(u64::from_le_bytes([
+            1 << 0,
+            1 << 1,
+            1 << 2,
+            1 << 3,
+            1 << 4,
+            1 << 5,
+            1 << 6,
+            1 << 7,
+        ]) as i64);
         // PSHUFB selects table[byte & 0b00001111] unless index bit 7 is set,
         // in which case it returns zero. Thus this lookup contributes only
         // for bytes below 128. On wide vectors, broadcast repeats the full
