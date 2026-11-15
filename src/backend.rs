@@ -56,8 +56,8 @@ impl SimdBackend {
         // Array order defines preference, independently of enum discriminants.
         // is_available() supplies the platform's runtime or target-feature
         // checks. cfg removes backends for other architectures; the explicit
-        // slice type also permits an empty list on targets with no SIMD backend.
-        let backends: &[Self] = &[
+        // element type also permits an empty array on targets with no SIMD backend.
+        let backends: [Self; _] = [
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Self::Avx512Vbmi,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -75,7 +75,7 @@ impl SimdBackend {
         ];
         for backend in backends {
             if backend.is_available() {
-                return *backend;
+                return backend;
             }
         }
         Self::Fallback
