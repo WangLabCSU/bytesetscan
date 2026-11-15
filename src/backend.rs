@@ -55,9 +55,8 @@ impl SimdBackend {
     pub fn new() -> Self {
         // Array order defines preference, independently of enum discriminants.
         // is_available() supplies the platform's runtime or target-feature
-        // checks. cfg removes backends for other architectures; the explicit
-        // element type also permits an empty array on targets with no SIMD backend.
-        let backends: [Self; _] = [
+        // checks. cfg removes backends for other architectures.
+        let backends = [
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
             Self::Avx512Vbmi,
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -73,12 +72,12 @@ impl SimdBackend {
             #[cfg(target_arch = "wasm32")]
             Self::WasmSimd128,
         ];
-        for backend in backends {
-            if backend.is_available() {
-                return backend;
-            }
-        }
-        Self::Fallback
+        // The predicate's signature supplies the element type even when cfg
+        // leaves the array empty on a target with no SIMD backend.
+        backends
+            .into_iter()
+            .find(Self::is_available)
+            .unwrap_or(Self::Fallback)
     }
 
     /// Returns an iterator over all backends defined for the compilation target.
