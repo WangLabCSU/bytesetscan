@@ -51,13 +51,26 @@ impl BitsetTable {
     /// Each byte is yielded once. With ASCII case-insensitive matching, both
     /// cases of each letter are included.
     pub(super) fn needle(&self) -> impl Iterator<Item = u8> + '_ {
-        (0..=u8::MAX).filter(|&byte| self.contains(byte))
-    }
-
-    #[inline(always)]
-    fn contains(&self, byte: u8) -> bool {
-        // A byte always selects entry 0..=3 and bit 0..=63, including 0b1111_1111.
-        self.bits[(byte >> 6) as usize] & (1 << (byte & 0b0011_1111)) != 0
+        // A byte is [entry index: 2 bits][bit index: 6 bits]. For example,
+        // A = 0b01_000001 uses entry 1, bit 1. The set bit's position supplies
+        // the low six bits of the byte; the stored flag value does not.
+        // Visit entries first, then their bit positions, so every byte from
+        // an earlier entry precedes every byte from a later entry.
+        self.bits
+            .iter()
+            .enumerate()
+            .flat_map(|(entry_index, &bit_flags)| {
+                // Each u64 has one membership flag for each of its 64 positions.
+                (0..u64::BITS).filter_map(move |bit_index| {
+                    if bit_flags & (1 << bit_index) != 0 {
+                        // Place the entry index in bits 6..7 and the bit index
+                        // in bits 0..5. Entry 0 / bit 0 yields byte 0 normally.
+                        Some(((entry_index << 6) | bit_index as usize) as u8)
+                    } else {
+                        None
+                    }
+                })
+            })
     }
 }
 
@@ -125,7 +138,7 @@ mod tests {
     fn new_encodes_exact_membership() {
         let needle = b"aB";
         let table = BitsetTable::new(needle);
-        // Inspect every stored membership bit independently of contains().
+        // Inspect every stored membership bit independently of needle().
         for (entry_index, &bits) in table.bits.iter().enumerate() {
             for bit_index in 0..64 {
                 // The entry index supplies the top two bits; the bit index
@@ -186,7 +199,7 @@ mod tests {
         let needle = b"@Az[`{";
         let expected = b"@AZ[`az{";
         let table = BitsetTable::with_case(true, needle);
-        // Inspect every stored membership bit independently of contains().
+        // Inspect every stored membership bit independently of needle().
         for (entry_index, &bits) in table.bits.iter().enumerate() {
             for bit_index in 0..64 {
                 // The entry index supplies the top two bits; the bit index
@@ -290,7 +303,22 @@ mod tests {
     }
 
     #[test]
-    fn contains_reads_the_first_and_last_bit_of_each_entry() {
+    fn needle_decodes_each_membership_bit() {
+        for expected_byte in 0..=u8::MAX {
+            let mut table = BitsetTable { bits: [0; 4] };
+            // Read the two fields separately: the high two bits choose the
+            // entry, and the low six bits choose its membership flag.
+            let entry_index = expected_byte >> 6;
+            let bit_index = expected_byte & 0b0011_1111;
+            // Only this byte is present; every other bit remains clear.
+            table.bits[entry_index as usize] = 1 << bit_index;
+
+            assert!(table.needle().eq([expected_byte]), "byte={expected_byte}");
+        }
+    }
+
+    #[test]
+    fn needle_reads_the_first_and_last_bit_of_each_entry() {
         // Each u64 stores membership for one consecutive range of 64 bytes.
         for (entry, first_byte, last_byte) in [
             (0, 0, 63),    // bits[0]: 0..=63
@@ -298,29 +326,51 @@ mod tests {
             (2, 128, 191), // bits[2]: 128..=191
             (3, 192, 255), // bits[3]: 192..=255
         ] {
-            // Only this entry has bits set. Reading another entry must fail.
+            // Only this entry has bits set; the other entries yield no bytes.
             let mut bits = [0; 4];
             bits[entry] = (1 << 0) | (1 << 63);
             let table = BitsetTable { bits };
 
-            for byte in 0..=255 {
-                assert_eq!(
-                    table.contains(byte),
-                    byte == first_byte || byte == last_byte,
-                    "entry={entry}, byte={byte}"
-                );
-            }
+            assert!(table.needle().eq([first_byte, last_byte]), "entry={entry}");
         }
     }
 
     #[test]
-    fn needle_yields_bytes_in_ascending_order() {
-        // Each entry covers 64 byte values. Entry 1's bits 1 and 34 encode
-        // 65 (A) and 98 (b); the other entries encode 0, 128, and 255.
+    fn needle_is_empty_when_all_entries_are_clear() {
+        let table = BitsetTable { bits: [0; 4] };
+
+        assert_eq!(table.needle().next(), None);
+    }
+
+    #[test]
+    fn needle_yields_every_byte_when_all_entries_are_full() {
         let table = BitsetTable {
-            bits: [1, (1 << 1) | (1 << 34), 1, 1 << 63],
+            bits: [u64::MAX; 4],
         };
 
-        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
+        assert!(table.needle().eq(0..=u8::MAX));
+    }
+
+    #[test]
+    fn needle_yields_bytes_in_ascending_order() {
+        let mut bits = [0; 4];
+        // The last bit of entry 0 must precede the first bit of entry 1,
+        // even though their bit indices alone have the opposite order.
+        bits[0] = 1 << 63; // 0b00_111111 = 63
+        bits[1] = 1 << 0; // 0b01_000000 = 64
+        let table = BitsetTable { bits };
+
+        assert!(table.needle().eq([63, 64]));
+    }
+
+    #[test]
+    fn needle_yields_each_set_bit_in_one_entry() {
+        let mut bits = [0; 4];
+        // A = 0b01_000001 and a = 0b01_100001 both use entry 1.
+        // Their low six bits select bit positions 1 and 33, respectively.
+        bits[1] = (1 << 1) | (1 << 33);
+        let table = BitsetTable { bits };
+
+        assert!(table.needle().eq(*b"Aa"));
     }
 }
