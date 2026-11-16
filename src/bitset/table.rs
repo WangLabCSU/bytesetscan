@@ -74,10 +74,12 @@ mod tests {
         for member in 0..=255u8 {
             let table = BitsetTable::new(&[member, member]);
             // Repeating a byte must set only its own membership flag.
-            for (entry, &bits) in table.bits.iter().enumerate() {
-                for bit in 0..64 {
-                    let byte = (entry * 64 + bit) as u8;
-                    assert_eq!(bits & (1 << bit) != 0, byte == member, "byte={byte}");
+            for (entry_index, &bits) in table.bits.iter().enumerate() {
+                for bit_index in 0..64 {
+                    // The entry index supplies the top two bits; the bit index
+                    // within that u64 supplies the low six bits.
+                    let byte = ((entry_index << 6) | bit_index) as u8;
+                    assert_eq!(bits & (1 << bit_index) != 0, byte == member, "byte={byte}");
                 }
             }
         }
@@ -91,11 +93,13 @@ mod tests {
             (&[255, 0, 128, 255, 17], &[0, 17, 128, 255]),
         ] {
             let table = BitsetTable::new(needle);
-            for (entry, &bits) in table.bits.iter().enumerate() {
-                for bit in 0..64 {
-                    let byte = (entry * 64 + bit) as u8;
+            for (entry_index, &bits) in table.bits.iter().enumerate() {
+                for bit_index in 0..64 {
+                    // The entry index supplies the top two bits; the bit index
+                    // within that u64 supplies the low six bits.
+                    let byte = ((entry_index << 6) | bit_index) as u8;
                     assert_eq!(
-                        bits & (1 << bit) != 0,
+                        bits & (1 << bit_index) != 0,
                         expected.contains(&byte),
                         "byte={byte}"
                     );
@@ -121,13 +125,14 @@ mod tests {
     fn new_encodes_exact_membership() {
         let needle = b"aB";
         let table = BitsetTable::new(needle);
-        // Entry n stores bytes n*64..n*64+63. Inspect each bit directly
-        // so a defect shared by construction and contains() cannot hide.
-        for (entry, &bits) in table.bits.iter().enumerate() {
-            for bit in 0..64 {
-                let byte = (entry * 64 + bit) as u8;
+        // Inspect every stored membership bit independently of contains().
+        for (entry_index, &bits) in table.bits.iter().enumerate() {
+            for bit_index in 0..64 {
+                // The entry index supplies the top two bits; the bit index
+                // within that u64 supplies the low six bits.
+                let byte = ((entry_index << 6) | bit_index) as u8;
                 assert_eq!(
-                    bits & (1 << bit) != 0,
+                    bits & (1 << bit_index) != 0,
                     needle.contains(&byte),
                     "byte={byte}"
                 );
@@ -141,11 +146,13 @@ mod tests {
         let needle = [0, b'A', b'z', 128, 255];
         let table = BitsetTable::with_case(false, &needle);
         let expected = [0, b'A', b'z', 128, 255];
-        for (entry, &bits) in table.bits.iter().enumerate() {
-            for bit in 0..64 {
-                let byte = (entry * 64 + bit) as u8;
+        for (entry_index, &bits) in table.bits.iter().enumerate() {
+            for bit_index in 0..64 {
+                // The entry index supplies the top two bits; the bit index
+                // within that u64 supplies the low six bits.
+                let byte = ((entry_index << 6) | bit_index) as u8;
                 assert_eq!(
-                    bits & (1 << bit) != 0,
+                    bits & (1 << bit_index) != 0,
                     expected.contains(&byte),
                     "byte={byte}"
                 );
@@ -159,11 +166,13 @@ mod tests {
         let needle = [0, b'A', b'z', 128, 255];
         let table = BitsetTable::with_case(true, &needle);
         let expected = [0, b'A', b'Z', b'a', b'z', 128, 255];
-        for (entry, &bits) in table.bits.iter().enumerate() {
-            for bit in 0..64 {
-                let byte = (entry * 64 + bit) as u8;
+        for (entry_index, &bits) in table.bits.iter().enumerate() {
+            for bit_index in 0..64 {
+                // The entry index supplies the top two bits; the bit index
+                // within that u64 supplies the low six bits.
+                let byte = ((entry_index << 6) | bit_index) as u8;
                 assert_eq!(
-                    bits & (1 << bit) != 0,
+                    bits & (1 << bit_index) != 0,
                     expected.contains(&byte),
                     "byte={byte}"
                 );
@@ -177,13 +186,14 @@ mod tests {
         let needle = b"@Az[`{";
         let expected = b"@AZ[`az{";
         let table = BitsetTable::with_case(true, needle);
-        // Entry n stores bytes n*64..n*64+63. Inspect each bit directly
-        // so a defect shared by construction and contains() cannot hide.
-        for (entry, &bits) in table.bits.iter().enumerate() {
-            for bit in 0..64 {
-                let byte = (entry * 64 + bit) as u8;
+        // Inspect every stored membership bit independently of contains().
+        for (entry_index, &bits) in table.bits.iter().enumerate() {
+            for bit_index in 0..64 {
+                // The entry index supplies the top two bits; the bit index
+                // within that u64 supplies the low six bits.
+                let byte = ((entry_index << 6) | bit_index) as u8;
                 assert_eq!(
-                    bits & (1 << bit) != 0,
+                    bits & (1 << bit_index) != 0,
                     expected.contains(&byte),
                     "byte={byte}"
                 );
@@ -197,14 +207,20 @@ mod tests {
         // its complement. Both sets have sixteen distinct row patterns.
         for on_diagonal in [true, false] {
             let needle: Vec<u8> = (0..=255u8)
-                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .filter(|byte| {
+                    let high_nibble = byte >> 4;
+                    let low_nibble = byte & 0b0000_1111;
+                    (high_nibble == low_nibble) == on_diagonal
+                })
                 .collect();
             let table = BitsetTable::new(&needle);
-            for (entry, &bits) in table.bits.iter().enumerate() {
-                for bit in 0..64 {
-                    let byte = (entry * 64 + bit) as u8;
+            for (entry_index, &bits) in table.bits.iter().enumerate() {
+                for bit_index in 0..64 {
+                    // The entry index supplies the top two bits; the bit index
+                    // within that u64 supplies the low six bits.
+                    let byte = ((entry_index << 6) | bit_index) as u8;
                     assert_eq!(
-                        bits & (1 << bit) != 0,
+                        bits & (1 << bit_index) != 0,
                         needle.contains(&byte),
                         "byte={byte}"
                     );
@@ -219,14 +235,20 @@ mod tests {
         // its complement. Both sets have sixteen distinct row patterns.
         for on_diagonal in [true, false] {
             let needle: Vec<u8> = (0..=255u8)
-                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .filter(|byte| {
+                    let high_nibble = byte >> 4;
+                    let low_nibble = byte & 0b0000_1111;
+                    (high_nibble == low_nibble) == on_diagonal
+                })
                 .collect();
             let table = BitsetTable::with_case(false, &needle);
-            for (entry, &bits) in table.bits.iter().enumerate() {
-                for bit in 0..64 {
-                    let byte = (entry * 64 + bit) as u8;
+            for (entry_index, &bits) in table.bits.iter().enumerate() {
+                for bit_index in 0..64 {
+                    // The entry index supplies the top two bits; the bit index
+                    // within that u64 supplies the low six bits.
+                    let byte = ((entry_index << 6) | bit_index) as u8;
                     assert_eq!(
-                        bits & (1 << bit) != 0,
+                        bits & (1 << bit_index) != 0,
                         needle.contains(&byte),
                         "byte={byte}"
                     );
@@ -241,18 +263,24 @@ mod tests {
         // its complement. Both sets have sixteen distinct row patterns.
         for on_diagonal in [true, false] {
             let needle: Vec<u8> = (0..=255u8)
-                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .filter(|byte| {
+                    let high_nibble = byte >> 4;
+                    let low_nibble = byte & 0b0000_1111;
+                    (high_nibble == low_nibble) == on_diagonal
+                })
                 .collect();
             let table = BitsetTable::with_case(true, &needle);
             let expected: Vec<u8> = needle
                 .iter()
                 .flat_map(|byte| [byte.to_ascii_lowercase(), byte.to_ascii_uppercase()])
                 .collect();
-            for (entry, &bits) in table.bits.iter().enumerate() {
-                for bit in 0..64 {
-                    let byte = (entry * 64 + bit) as u8;
+            for (entry_index, &bits) in table.bits.iter().enumerate() {
+                for bit_index in 0..64 {
+                    // The entry index supplies the top two bits; the bit index
+                    // within that u64 supplies the low six bits.
+                    let byte = ((entry_index << 6) | bit_index) as u8;
                     assert_eq!(
-                        bits & (1 << bit) != 0,
+                        bits & (1 << bit_index) != 0,
                         expected.contains(&byte),
                         "byte={byte}"
                     );

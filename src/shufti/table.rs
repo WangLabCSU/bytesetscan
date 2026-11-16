@@ -276,9 +276,10 @@ mod tests {
         // Read every high/low coordinate directly. Group flag numbers
         // may differ between valid encodings; their intersections must
         // represent exactly the input set.
-        for (high, &high_flags) in table.high.iter().enumerate() {
-            for (low, &low_flags) in table.low.iter().enumerate() {
-                let byte = (high * 16 + low) as u8;
+        for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+            for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                // The table indices supply the byte's high and low four bits.
+                let byte = ((high_nibble << 4) | low_nibble) as u8;
                 assert_eq!(
                     low_flags & high_flags != 0,
                     needle.contains(&byte),
@@ -324,9 +325,10 @@ mod tests {
         for member in 0..=255u8 {
             let table = ShuftiTable::new(&[member, member]).unwrap();
             // Repeating a byte must set only its own membership flag.
-            for (high, &high_flags) in table.high.iter().enumerate() {
-                for (low, &low_flags) in table.low.iter().enumerate() {
-                    let byte = (high * 16 + low) as u8;
+            for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+                for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                    // The table indices supply the byte's high and low four bits.
+                    let byte = ((high_nibble << 4) | low_nibble) as u8;
                     assert_eq!(low_flags & high_flags != 0, byte == member, "byte={byte}");
                 }
             }
@@ -341,9 +343,10 @@ mod tests {
             (&[255, 0, 128, 255, 17], &[0, 17, 128, 255]),
         ] {
             let table = ShuftiTable::new(needle).unwrap();
-            for (high, &high_flags) in table.high.iter().enumerate() {
-                for (low, &low_flags) in table.low.iter().enumerate() {
-                    let byte = (high * 16 + low) as u8;
+            for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+                for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                    // The table indices supply the byte's high and low four bits.
+                    let byte = ((high_nibble << 4) | low_nibble) as u8;
                     assert_eq!(
                         low_flags & high_flags != 0,
                         expected.contains(&byte),
@@ -360,9 +363,10 @@ mod tests {
         let needle = [0, b'A', b'z', 128, 255];
         let table = ShuftiTable::with_case(false, &needle).unwrap();
         let expected = [0, b'A', b'z', 128, 255];
-        for (high, &high_flags) in table.high.iter().enumerate() {
-            for (low, &low_flags) in table.low.iter().enumerate() {
-                let byte = (high * 16 + low) as u8;
+        for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+            for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                // The table indices supply the byte's high and low four bits.
+                let byte = ((high_nibble << 4) | low_nibble) as u8;
                 assert_eq!(
                     low_flags & high_flags != 0,
                     expected.contains(&byte),
@@ -378,9 +382,10 @@ mod tests {
         let needle = [0, b'A', b'z', 128, 255];
         let table = ShuftiTable::with_case(true, &needle).unwrap();
         let expected = [0, b'A', b'Z', b'a', b'z', 128, 255];
-        for (high, &high_flags) in table.high.iter().enumerate() {
-            for (low, &low_flags) in table.low.iter().enumerate() {
-                let byte = (high * 16 + low) as u8;
+        for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+            for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                // The table indices supply the byte's high and low four bits.
+                let byte = ((high_nibble << 4) | low_nibble) as u8;
                 assert_eq!(
                     low_flags & high_flags != 0,
                     expected.contains(&byte),
@@ -399,9 +404,10 @@ mod tests {
         // Read every high/low coordinate directly. Group flag numbers
         // may differ between valid encodings; their intersections must
         // represent exactly the expected set.
-        for (high, &high_flags) in table.high.iter().enumerate() {
-            for (low, &low_flags) in table.low.iter().enumerate() {
-                let byte = (high * 16 + low) as u8;
+        for (high_nibble, &high_flags) in table.high.iter().enumerate() {
+            for (low_nibble, &low_flags) in table.low.iter().enumerate() {
+                // The table indices supply the byte's high and low four bits.
+                let byte = ((high_nibble << 4) | low_nibble) as u8;
                 assert_eq!(
                     low_flags & high_flags != 0,
                     expected.contains(&byte),
