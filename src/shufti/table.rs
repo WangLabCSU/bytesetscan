@@ -188,12 +188,33 @@ impl ShuftiTable {
     /// Each byte is yielded once. With ASCII case-insensitive matching, both
     /// cases of each letter are included.
     pub(super) fn needle(&self) -> impl Iterator<Item = u8> + '_ {
-        // Enumerate byte values directly rather than storing a byte-universe
-        // array. Each pair of table lookups tests the reconstructed membership;
-        // no search backend or original input is needed for this operation.
-        (0..=u8::MAX).filter(|&byte| {
-            self.low[(byte & 0b00001111) as usize] & self.high[(byte >> 4) as usize] != 0
-        })
+        // Table indices supply the byte's high and low four bits. The entries
+        // contain group flags: their bit positions do not encode byte values.
+        // For example, low[1], high[4] and high[6] sharing bit 7 represents
+        // A = 0b0100_0001 and a = 0b0110_0001, regardless of that flag's position.
+        //
+        // Visit high nibbles first, then low nibbles, to preserve byte order:
+        // all bytes with high nibble 0 precede all bytes with high nibble 1.
+        self.high
+            .iter()
+            .enumerate()
+            .flat_map(move |(high_nibble, &high_flags)| {
+                self.low
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(low_nibble, &low_flags)| {
+                        // A shared group must allow BOTH nibble values. Merely
+                        // having nonzero entries is insufficient if their flags
+                        // name different groups.
+                        if low_flags & high_flags != 0 {
+                            // Restore the byte from the two indices. Each pair
+                            // is visited once, including (0, 0) for byte zero.
+                            Some(((high_nibble << 4) | low_nibble) as u8)
+                        } else {
+                            None
+                        }
+                    })
+            })
     }
 }
 
@@ -418,22 +439,84 @@ mod tests {
     }
 
     #[test]
-    fn needle_yields_bytes_in_ascending_order() {
-        // Define the masks independently of the builder. Deliberately assign
-        // group flags in a different order from the byte values.
+    fn needle_reconstructs_each_byte_from_its_nibbles() {
+        for expected_byte in 0..=u8::MAX {
+            let mut table = ShuftiTable {
+                low: [0; 16],
+                high: [0; 16],
+            };
+            let low_nibble = expected_byte & 0b0000_1111;
+            let high_nibble = expected_byte >> 4;
+            // Only these two indices share a group. Using flag bit 7 for
+            // every byte checks that the indices determine the returned byte.
+            table.low[low_nibble as usize] = 1 << 7;
+            table.high[high_nibble as usize] = 1 << 7;
+
+            assert!(table.needle().eq([expected_byte]), "byte={expected_byte}");
+        }
+    }
+
+    #[test]
+    fn needle_does_not_mix_distinct_groups() {
         let mut low = [0; 16];
         let mut high = [0; 16];
-        low[0] = 1 << 5;
-        high[0] = 1 << 5; // 0
-        high[8] = 1 << 5; // 128
-        low[1] = 1 << 7;
-        high[4] = 1 << 7; // A
+        low[1] = 1 << 0;
+        high[4] = 1 << 0; // A = 0b0100_0001, in group 0.
         low[2] = 1 << 1;
-        high[6] = 1 << 1; // b
-        low[15] = 1 << 3;
-        high[15] = 1 << 3; // 255
+        high[6] = 1 << 1; // b = 0b0110_0010, in group 1.
         let table = ShuftiTable { low, high };
 
-        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
+        // The crossed pairs B (high 4, low 2) and a (high 6, low 1) have
+        // nonzero entries but no common group, so neither may be returned.
+        assert!(table.needle().eq(*b"Ab"));
+    }
+
+    #[test]
+    fn needle_reuses_a_group_for_multiple_high_nibbles() {
+        let mut low = [0; 16];
+        let mut high = [0; 16];
+        // A and a share low nibble 1, with high nibbles 4 and 6.
+        low[1] = 1 << 7;
+        high[4] = 1 << 7; // A
+        high[6] = 1 << 7; // a
+        let table = ShuftiTable { low, high };
+
+        assert!(table.needle().eq(*b"Aa"));
+    }
+
+    #[test]
+    fn needle_is_empty_when_both_tables_are_clear() {
+        let table = ShuftiTable {
+            low: [0; 16],
+            high: [0; 16],
+        };
+
+        assert_eq!(table.needle().next(), None);
+    }
+
+    #[test]
+    fn needle_yields_every_byte_when_all_entries_share_a_group() {
+        // Every high/low pair shares group 0, so every byte belongs to the set.
+        let table = ShuftiTable {
+            low: [1 << 0; 16],
+            high: [1 << 0; 16],
+        };
+
+        assert!(table.needle().eq(0..=u8::MAX));
+    }
+
+    #[test]
+    fn needle_yields_bytes_in_ascending_order() {
+        let mut low = [0; 16];
+        let mut high = [0; 16];
+        // Low-nibble order and group order both put 16 before 15. The iterator
+        // must instead visit high nibble 0 before high nibble 1.
+        low[0b1111] = 1 << 7;
+        high[0b0000] = 1 << 7; // 0b0000_1111 = 15
+        low[0b0000] = 1 << 0;
+        high[0b0001] = 1 << 0; // 0b0001_0000 = 16
+        let table = ShuftiTable { low, high };
+
+        assert!(table.needle().eq([15, 16]));
     }
 }
