@@ -101,10 +101,38 @@ mod tests {
     #[test]
     fn search_translates_the_end_sentinel_to_none() {
         let table = TruffleTable::new(b"a");
-        let vtable = mock_vtable();
+        let vtable = VTable {
+            find: exhausted,
+            mismatch: exhausted,
+            ..mock_vtable()
+        };
         for haystack in [b"!".as_slice(), b""] {
             assert_eq!(vtable.search::<false>(&table, haystack), None);
             assert_eq!(vtable.search::<true>(&table, haystack), None);
+        }
+
+        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], haystack: &[u8]) -> usize {
+            haystack.len()
+        }
+    }
+
+    #[test]
+    fn search_passes_the_table_and_haystack() {
+        let table = TruffleTable::new(b"a");
+        let vtable = VTable {
+            find: check_input,
+            mismatch: check_input,
+            ..mock_vtable()
+        };
+        assert_eq!(vtable.search::<false>(&table, b"abcd"), Some(0));
+        assert_eq!(vtable.search::<true>(&table, b"abcd"), Some(0));
+
+        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> usize {
+            let expected = TruffleTable::new(b"a");
+            assert_eq!(low, expected.lower());
+            assert_eq!(high, expected.upper());
+            assert_eq!(haystack, b"abcd");
+            0
         }
     }
 
@@ -125,10 +153,38 @@ mod tests {
     #[test]
     fn rsearch_translates_the_end_sentinel_to_none() {
         let table = TruffleTable::new(b"a");
-        let vtable = mock_vtable();
+        let vtable = VTable {
+            rfind: exhausted,
+            rmismatch: exhausted,
+            ..mock_vtable()
+        };
         for haystack in [b"!".as_slice(), b""] {
             assert_eq!(vtable.rsearch::<false>(&table, haystack), None);
             assert_eq!(vtable.rsearch::<true>(&table, haystack), None);
+        }
+
+        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], haystack: &[u8]) -> usize {
+            haystack.len()
+        }
+    }
+
+    #[test]
+    fn rsearch_passes_the_table_and_haystack() {
+        let table = TruffleTable::new(b"a");
+        let vtable = VTable {
+            rfind: check_input,
+            rmismatch: check_input,
+            ..mock_vtable()
+        };
+        assert_eq!(vtable.rsearch::<false>(&table, b"abcd"), Some(0));
+        assert_eq!(vtable.rsearch::<true>(&table, b"abcd"), Some(0));
+
+        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> usize {
+            let expected = TruffleTable::new(b"a");
+            assert_eq!(low, expected.lower());
+            assert_eq!(high, expected.upper());
+            assert_eq!(haystack, b"abcd");
+            0
         }
     }
 
@@ -141,14 +197,7 @@ mod tests {
         }
     }
 
-    fn entry<const INDEX: usize>(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> usize {
-        let table = TruffleTable::new(b"a");
-        assert_eq!(low, table.lower());
-        assert_eq!(high, table.upper());
-        match haystack {
-            b"abcd" => INDEX,
-            b"!" | b"" => haystack.len(),
-            _ => panic!("unexpected haystack: {haystack:?}"),
-        }
+    fn entry<const INDEX: usize>(_low: &[u8; 16], _high: &[u8; 16], _haystack: &[u8]) -> usize {
+        INDEX
     }
 }

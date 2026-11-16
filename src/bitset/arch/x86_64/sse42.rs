@@ -100,8 +100,13 @@ mod tests {
         if !SimdBackend::Sse4_2.is_available() {
             return;
         }
-        // Members sit on both sides of each 64-bit word boundary.
-        let needle = [0, 63, 64, 127, 128, 191, 192, 255];
+        // Each pair is the first and last byte represented by one u64 entry.
+        let needle = [
+            0, 63, // bits[0]: 0..=63
+            64, 127, // bits[1]: 64..=127
+            128, 191, // bits[2]: 128..=191
+            192, 255, // bits[3]: 192..=255
+        ];
         let bits = *BitsetTable::new(&needle).bits();
         for member in needle {
             // Flipping bit 0 of any member above produces a nonmember.
@@ -119,8 +124,13 @@ mod tests {
         if !SimdBackend::Sse4_2.is_available() {
             return;
         }
-        // Members sit on both sides of each 64-bit word boundary.
-        let needle = [0, 63, 64, 127, 128, 191, 192, 255];
+        // Each pair is the first and last byte represented by one u64 entry.
+        let needle = [
+            0, 63, // bits[0]: 0..=63
+            64, 127, // bits[1]: 64..=127
+            128, 191, // bits[2]: 128..=191
+            192, 255, // bits[3]: 192..=255
+        ];
         let bits = *BitsetTable::new(&needle).bits();
         for member in needle {
             // Flipping bit 0 of any member above produces a nonmember.
@@ -138,8 +148,13 @@ mod tests {
         if !SimdBackend::Sse4_2.is_available() {
             return;
         }
-        // Members sit on both sides of each 64-bit word boundary.
-        let needle = [0, 63, 64, 127, 128, 191, 192, 255];
+        // Each pair is the first and last byte represented by one u64 entry.
+        let needle = [
+            0, 63, // bits[0]: 0..=63
+            64, 127, // bits[1]: 64..=127
+            128, 191, // bits[2]: 128..=191
+            192, 255, // bits[3]: 192..=255
+        ];
         let bits = *BitsetTable::new(&needle).bits();
         for member in needle {
             // Flipping bit 0 of any member above produces a nonmember.
@@ -157,8 +172,13 @@ mod tests {
         if !SimdBackend::Sse4_2.is_available() {
             return;
         }
-        // Members sit on both sides of each 64-bit word boundary.
-        let needle = [0, 63, 64, 127, 128, 191, 192, 255];
+        // Each pair is the first and last byte represented by one u64 entry.
+        let needle = [
+            0, 63, // bits[0]: 0..=63
+            64, 127, // bits[1]: 64..=127
+            128, 191, // bits[2]: 128..=191
+            192, 255, // bits[3]: 192..=255
+        ];
         let bits = *BitsetTable::new(&needle).bits();
         for member in needle {
             // Flipping bit 0 of any member above produces a nonmember.

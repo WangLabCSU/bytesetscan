@@ -199,7 +199,6 @@ impl ShuftiTable {
 
 #[cfg(test)]
 mod tests {
-
     extern crate std;
 
     use std::vec::Vec;
@@ -207,20 +206,34 @@ mod tests {
     use super::ShuftiTable;
 
     #[test]
+    fn new_leaves_all_flags_clear_for_an_empty_needle() {
+        let table = ShuftiTable::new(b"").unwrap();
+        assert_eq!(table.low, [0; 16]);
+        assert_eq!(table.high, [0; 16]);
+    }
+
+    #[test]
+    fn new_encodes_the_full_byte_set() {
+        let needle: Vec<u8> = (0..=255).collect();
+        let table = ShuftiTable::new(&needle).unwrap();
+        // All rows share the same group, whose flag is bit 0.
+        assert_eq!(table.low, [1; 16]);
+        assert_eq!(table.high, [1; 16]);
+    }
+
+    #[test]
     fn new_accepts_eight_distinct_groups() {
-        // n << 4 puts n in the high four bits; adding n fills the low four bits.
-        // For n = 3: (0b0011 << 4) + 0b0011 = 0b0011_0011.
-        // Since n < 16, these parts do not overlap, so the addition has no carry.
-        //
-        // Shufti rows share a group only when their allowed-low-value SETS match.
-        // Here each row contains just its own low value:
-        //
-        // high row           | 0   | 1   | 2   | ...
-        // allowed low values | {0} | {1} | {2} | ...
-        //
-        // The sets differ, so every row needs a separate group flag.
-        // Eight distinct sets use all eight available group flags.
+        // Each byte has equal high and low nibbles: 0x00, 0x11, ..., 0x77.
+        // Each row allows a different low nibble, requiring all eight flags.
         let needle: Vec<u8> = (0..8).map(|n| (n << 4) + n).collect();
+        assert!(ShuftiTable::new(&needle).is_some());
+    }
+
+    #[test]
+    fn new_reuses_a_group_after_all_eight_flags_are_assigned() {
+        let mut needle: Vec<u8> = (0..8).map(|n| (n << 4) + n).collect();
+        // Row 8 allows only low nibble 0, so it shares row 0's group.
+        needle.push(128);
         assert!(ShuftiTable::new(&needle).is_some());
     }
 
@@ -243,15 +256,6 @@ mod tests {
     }
 
     #[test]
-    fn new_reuses_a_group_after_all_eight_flags_are_assigned() {
-        let mut needle: Vec<u8> = (0..8).map(|n| (n << 4) + n).collect();
-        // 128 = 0b1000_0000 adds row 8 with low value 0. Its pattern
-        // equals row 0's {0}, so it reuses that flag instead of needing a ninth.
-        needle.push(128);
-        assert!(ShuftiTable::new(&needle).is_some());
-    }
-
-    #[test]
     fn with_case_rejects_unrepresentable_needles() {
         // n << 4 puts n in the high four bits; adding n fills the low four bits.
         // For n = 3: (0b0011 << 4) + 0b0011 = 0b0011_0011.
@@ -266,91 +270,164 @@ mod tests {
     }
 
     #[test]
-    fn needle_yields_bytes_in_ascending_order() {
-        let table = ShuftiTable::new(&[255, b'b', 0, b'A', 128]).unwrap();
-        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
-    }
-
-    #[test]
-    fn needle_omits_duplicate_input_bytes() {
-        let table = ShuftiTable::new(b"aaaa").unwrap();
-        assert!(table.needle().eq(*b"a"));
-    }
-
-    fn for_each_needle(mut visit: impl FnMut(&[u8])) {
-        // Exercise duplicate handling for every possible byte value.
-        for member in 0..=255u8 {
-            let needle = [member, member];
-            visit(&needle);
-        }
-
-        let all: Vec<u8> = (0..=255u8).collect();
-        // n << 4 puts n in the high four bits; adding n fills the low four bits.
-        // For n = 3: (0b0011 << 4) + 0b0011 = 0b0011_0011.
-        // These eight different sets need eight separate group flags.
-        let groups: Vec<u8> = (0..8).map(|n| (n << 4) + n).collect();
-        // 128 = 0b1000_0000 adds row 8 with the same low-value set {0}
-        // as row 0, so the extra row can reuse an existing group flag.
-        let reused: Vec<u8> = groups.iter().copied().chain([128]).collect();
-        for needle in [
-            b"".as_slice(),
-            b"baba",
-            &[255, 0, 128, 255, 17],
-            &[0, b'A', b'z', 128, 255],
-            &groups,
-            &reused,
-            &all,
-        ] {
-            visit(needle);
-        }
-    }
-
-    #[test]
     fn new_encodes_exact_membership() {
-        for_each_needle(|needle| {
-            let table = ShuftiTable::new(needle).unwrap();
-            let actual: Vec<u8> = table.needle().collect();
-            for byte in 0..=255u8 {
+        let needle = b"aB";
+        let table = ShuftiTable::new(needle).unwrap();
+        // Read every high/low coordinate directly. Group flag numbers
+        // may differ between valid encodings; their intersections must
+        // represent exactly the input set.
+        for (high, &high_flags) in table.high.iter().enumerate() {
+            for (low, &low_flags) in table.low.iter().enumerate() {
+                let byte = (high * 16 + low) as u8;
                 assert_eq!(
-                    actual.contains(&byte),
+                    low_flags & high_flags != 0,
                     needle.contains(&byte),
-                    "byte {byte}"
+                    "byte={byte}"
                 );
             }
-        });
+        }
     }
 
     #[test]
-    fn with_case_false_preserves_exact_membership() {
-        for_each_needle(|needle| {
-            let table = ShuftiTable::with_case(false, needle).unwrap();
-            let actual: Vec<u8> = table.needle().collect();
-            for byte in 0..=255u8 {
+    fn new_encodes_single_byte_masks() {
+        // BuildMask1: 'a' has low nibble 1 and high nibble 6. Only those
+        // entries may contain the single group flag; all others stay clear.
+        let table = ShuftiTable::new(b"a").unwrap();
+        assert_eq!(table.low, [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(table.high, [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn new_excludes_crossed_nibble_pairs() {
+        // BuildMask2: combining 'a's low nibble with 'B's high nibble
+        // produces 'A'; the opposite combination produces 'b'. Neither
+        // crossed pair may match, even though both input bytes must match.
+        let table = ShuftiTable::new(b"aB").unwrap();
+        assert_ne!(table.low[1] & table.high[6], 0); // a
+        assert_ne!(table.low[2] & table.high[4], 0); // B
+        assert_eq!(table.low[1] & table.high[4], 0); // A
+        assert_eq!(table.low[2] & table.high[6], 0); // b
+    }
+
+    #[test]
+    fn new_encodes_four_letter_masks() {
+        // BuildMask4: both low nibbles are members in both high-nibble rows.
+        let table = ShuftiTable::new(b"aBAb").unwrap();
+        assert_ne!(table.low[1] & table.high[6], 0); // a
+        assert_ne!(table.low[1] & table.high[4], 0); // A
+        assert_ne!(table.low[2] & table.high[6], 0); // b
+        assert_ne!(table.low[2] & table.high[4], 0); // B
+    }
+
+    #[test]
+    fn new_ignores_duplicate_bytes() {
+        for member in 0..=255u8 {
+            let table = ShuftiTable::new(&[member, member]).unwrap();
+            // Repeating a byte must set only its own membership flag.
+            for (high, &high_flags) in table.high.iter().enumerate() {
+                for (low, &low_flags) in table.low.iter().enumerate() {
+                    let byte = (high * 16 + low) as u8;
+                    assert_eq!(low_flags & high_flags != 0, byte == member, "byte={byte}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_preserves_distinct_members_in_repeated_input() {
+        for (needle, expected) in [
+            (b"baba".as_slice(), b"ab".as_slice()),
+            // Repeated, unordered bytes from both halves of the byte range.
+            (&[255, 0, 128, 255, 17], &[0, 17, 128, 255]),
+        ] {
+            let table = ShuftiTable::new(needle).unwrap();
+            for (high, &high_flags) in table.high.iter().enumerate() {
+                for (low, &low_flags) in table.low.iter().enumerate() {
+                    let byte = (high * 16 + low) as u8;
+                    assert_eq!(
+                        low_flags & high_flags != 0,
+                        expected.contains(&byte),
+                        "byte={byte}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_case_false_keeps_ascii_cases_distinct() {
+        // NUL and high bytes stay unchanged; A and z exercise both ASCII cases.
+        let needle = [0, b'A', b'z', 128, 255];
+        let table = ShuftiTable::with_case(false, &needle).unwrap();
+        let expected = [0, b'A', b'z', 128, 255];
+        for (high, &high_flags) in table.high.iter().enumerate() {
+            for (low, &low_flags) in table.low.iter().enumerate() {
+                let byte = (high * 16 + low) as u8;
                 assert_eq!(
-                    actual.contains(&byte),
-                    needle.contains(&byte),
-                    "byte {byte}"
+                    low_flags & high_flags != 0,
+                    expected.contains(&byte),
+                    "byte={byte}"
                 );
             }
-        });
+        }
+    }
+
+    #[test]
+    fn with_case_true_expands_letters_among_non_ascii_bytes() {
+        // NUL and high bytes stay unchanged; A and z exercise both ASCII cases.
+        let needle = [0, b'A', b'z', 128, 255];
+        let table = ShuftiTable::with_case(true, &needle).unwrap();
+        let expected = [0, b'A', b'Z', b'a', b'z', 128, 255];
+        for (high, &high_flags) in table.high.iter().enumerate() {
+            for (low, &low_flags) in table.low.iter().enumerate() {
+                let byte = (high * 16 + low) as u8;
+                assert_eq!(
+                    low_flags & high_flags != 0,
+                    expected.contains(&byte),
+                    "byte={byte}"
+                );
+            }
+        }
     }
 
     #[test]
     fn with_case_true_expands_ascii_letters_only() {
-        for_each_needle(|needle| {
-            let table = ShuftiTable::with_case(true, needle).unwrap();
-            let actual: Vec<u8> = table.needle().collect();
-            let expected: Vec<u8> = needle
-                .iter()
-                .flat_map(|byte| [byte.to_ascii_lowercase(), byte.to_ascii_uppercase()])
-                .collect();
-            for byte in 0..=255u8 {
+        // @, [, ` and { sit directly outside the ASCII letter ranges.
+        let needle = b"@Az[`{";
+        let expected = b"@AZ[`az{";
+        let table = ShuftiTable::with_case(true, needle).unwrap();
+        // Read every high/low coordinate directly. Group flag numbers
+        // may differ between valid encodings; their intersections must
+        // represent exactly the expected set.
+        for (high, &high_flags) in table.high.iter().enumerate() {
+            for (low, &low_flags) in table.low.iter().enumerate() {
+                let byte = (high * 16 + low) as u8;
                 assert_eq!(
-                    actual.contains(&byte),
+                    low_flags & high_flags != 0,
                     expected.contains(&byte),
-                    "byte {byte}"
+                    "byte={byte}"
                 );
             }
-        });
+        }
+    }
+
+    #[test]
+    fn needle_yields_bytes_in_ascending_order() {
+        // Define the masks independently of the builder. Deliberately assign
+        // group flags in a different order from the byte values.
+        let mut low = [0; 16];
+        let mut high = [0; 16];
+        low[0] = 1 << 5;
+        high[0] = 1 << 5; // 0
+        high[8] = 1 << 5; // 128
+        low[1] = 1 << 7;
+        high[4] = 1 << 7; // A
+        low[2] = 1 << 1;
+        high[6] = 1 << 1; // b
+        low[15] = 1 << 3;
+        high[15] = 1 << 3; // 255
+        let table = ShuftiTable { low, high };
+
+        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
     }
 }

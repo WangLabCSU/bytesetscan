@@ -101,10 +101,37 @@ mod tests {
     #[test]
     fn search_translates_the_end_sentinel_to_none() {
         let table = BitsetTable::new(&[0, 65, 130, 195]);
-        let vtable = mock_vtable();
+        let vtable = VTable {
+            find: exhausted,
+            mismatch: exhausted,
+            ..mock_vtable()
+        };
         for haystack in [b"!".as_slice(), b""] {
             assert_eq!(vtable.search::<false>(&table, haystack), None);
             assert_eq!(vtable.search::<true>(&table, haystack), None);
+        }
+
+        fn exhausted(_bits: &[u64; 4], haystack: &[u8]) -> usize {
+            haystack.len()
+        }
+    }
+
+    #[test]
+    fn search_passes_the_table_and_haystack() {
+        let table = BitsetTable::new(&[0, 65, 130, 195]);
+        let vtable = VTable {
+            find: check_input,
+            mismatch: check_input,
+            ..mock_vtable()
+        };
+        assert_eq!(vtable.search::<false>(&table, b"abcd"), Some(0));
+        assert_eq!(vtable.search::<true>(&table, b"abcd"), Some(0));
+
+        fn check_input(bits: &[u64; 4], haystack: &[u8]) -> usize {
+            // Each entry has a distinct flag, so passing the wrong data is visible.
+            assert_eq!(bits, &[1 << 0, 1 << 1, 1 << 2, 1 << 3]);
+            assert_eq!(haystack, b"abcd");
+            0
         }
     }
 
@@ -125,10 +152,37 @@ mod tests {
     #[test]
     fn rsearch_translates_the_end_sentinel_to_none() {
         let table = BitsetTable::new(&[0, 65, 130, 195]);
-        let vtable = mock_vtable();
+        let vtable = VTable {
+            rfind: exhausted,
+            rmismatch: exhausted,
+            ..mock_vtable()
+        };
         for haystack in [b"!".as_slice(), b""] {
             assert_eq!(vtable.rsearch::<false>(&table, haystack), None);
             assert_eq!(vtable.rsearch::<true>(&table, haystack), None);
+        }
+
+        fn exhausted(_bits: &[u64; 4], haystack: &[u8]) -> usize {
+            haystack.len()
+        }
+    }
+
+    #[test]
+    fn rsearch_passes_the_table_and_haystack() {
+        let table = BitsetTable::new(&[0, 65, 130, 195]);
+        let vtable = VTable {
+            rfind: check_input,
+            rmismatch: check_input,
+            ..mock_vtable()
+        };
+        assert_eq!(vtable.rsearch::<false>(&table, b"abcd"), Some(0));
+        assert_eq!(vtable.rsearch::<true>(&table, b"abcd"), Some(0));
+
+        fn check_input(bits: &[u64; 4], haystack: &[u8]) -> usize {
+            // Each entry has a distinct flag, so passing the wrong data is visible.
+            assert_eq!(bits, &[1 << 0, 1 << 1, 1 << 2, 1 << 3]);
+            assert_eq!(haystack, b"abcd");
+            0
         }
     }
 
@@ -141,12 +195,7 @@ mod tests {
         }
     }
 
-    fn entry<const INDEX: usize>(bits: &[u64; 4], haystack: &[u8]) -> usize {
-        assert_eq!(bits, &[0b1, 0b10, 0b100, 0b1000]);
-        match haystack {
-            b"abcd" => INDEX,
-            b"!" | b"" => haystack.len(),
-            _ => panic!("unexpected haystack: {haystack:?}"),
-        }
+    fn entry<const INDEX: usize>(_bits: &[u64; 4], _haystack: &[u8]) -> usize {
+        INDEX
     }
 }

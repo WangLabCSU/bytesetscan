@@ -102,7 +102,6 @@ impl TruffleTable {
 
 #[cfg(test)]
 mod tests {
-
     extern crate std;
 
     use std::vec::Vec;
@@ -110,114 +109,320 @@ mod tests {
     use super::TruffleTable;
 
     #[test]
-    fn new_encodes_exact_membership() {
-        for_each_needle(|needle| {
-            let table = TruffleTable::new(needle);
-            let actual: Vec<u8> = table.needle().collect();
-            for byte in 0..=255u8 {
-                assert_eq!(
-                    actual.contains(&byte),
-                    needle.contains(&byte),
-                    "byte {byte}"
-                );
-            }
-        });
+    fn new_sets_all_bits_for_the_full_set() {
+        let needle: Vec<u8> = (0..=255).collect();
+        let table = TruffleTable::new(&needle);
+        assert_eq!(table.lower, [0b1111_1111; 16]);
+        assert_eq!(table.upper, [0b1111_1111; 16]);
     }
 
     #[test]
-    fn with_case_false_preserves_exact_membership() {
-        for_each_needle(|needle| {
-            let table = TruffleTable::with_case(false, needle);
-            let actual: Vec<u8> = table.needle().collect();
-            for byte in 0..=255u8 {
-                assert_eq!(
-                    actual.contains(&byte),
-                    needle.contains(&byte),
-                    "byte {byte}"
-                );
+    fn new_sets_only_the_single_bytes_bit() {
+        // Each table coordinate represents byte half*128 + bit*16 + column.
+        // Build from that byte and require exactly this one bit to be set.
+        for half in 0..2 {
+            for column in 0..16 {
+                for bit in 0..8 {
+                    let byte = (half * 128 + bit * 16 + column) as u8;
+                    let table = TruffleTable::new(&[byte]);
+                    let mut expected = [[0; 16]; 2];
+                    expected[half][column] = 1 << bit;
+                    assert_eq!([table.lower, table.upper], expected, "byte={byte}");
+                }
             }
-        });
+        }
+    }
+
+    #[test]
+    fn new_encodes_growing_sets() {
+        // Keep 255 while adding the other bytes: {0,255}, {0,1,255}, ...,
+        // all bytes. Check every bit, including those not yet in the input.
+        let mut needle = Vec::from([255]);
+        for added in 0..=255 {
+            if added != 255 {
+                needle.push(added);
+            }
+            let table = TruffleTable::new(&needle);
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            byte <= added || byte == 255,
+                            "added={added}, byte={byte}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_encodes_shrinking_sets() {
+        // Remove 0, then 1, ..., then 255 from the full set. Each rebuilt
+        // table must contain only the remaining suffix, ending with no bits set.
+        let all: Vec<u8> = (0..=255).collect();
+        for removed in 0..256 {
+            let remaining = &all[removed + 1..];
+            let table = TruffleTable::new(remaining);
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = half * 128 + bit * 16 + column;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            byte > removed,
+                            "removed={removed}, byte={byte}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_ignores_duplicate_bytes() {
+        for member in 0..=255u8 {
+            let table = TruffleTable::new(&[member, member]);
+            // Repeating a byte must set only its own membership flag.
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(flags & (1 << bit) != 0, byte == member, "byte={byte}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_preserves_distinct_members_in_repeated_input() {
+        for (needle, expected) in [
+            (b"baba".as_slice(), b"ab".as_slice()),
+            // Repeated, unordered bytes from both halves of the byte range.
+            (&[255, 0, 128, 255, 17], &[0, 17, 128, 255]),
+        ] {
+            let table = TruffleTable::new(needle);
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            expected.contains(&byte),
+                            "byte={byte}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_encodes_exact_membership() {
+        let needle = b"aB";
+        let table = TruffleTable::new(needle);
+        // In each half, column c and bit r encode byte half*128 + r*16 + c.
+        // Inspect those stored bits without calling search() or needle().
+        for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+            for (column, &flags) in mask.iter().enumerate() {
+                for bit in 0..8 {
+                    let byte = (half * 128 + bit * 16 + column) as u8;
+                    assert_eq!(
+                        flags & (1 << bit) != 0,
+                        needle.contains(&byte),
+                        "byte={byte}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_case_false_keeps_ascii_cases_distinct() {
+        // NUL and high bytes stay unchanged; A and z exercise both ASCII cases.
+        let needle = [0, b'A', b'z', 128, 255];
+        let table = TruffleTable::with_case(false, &needle);
+        let expected = [0, b'A', b'z', 128, 255];
+        for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+            for (column, &flags) in mask.iter().enumerate() {
+                for bit in 0..8 {
+                    let byte = (half * 128 + bit * 16 + column) as u8;
+                    assert_eq!(
+                        flags & (1 << bit) != 0,
+                        expected.contains(&byte),
+                        "byte={byte}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_case_true_expands_letters_among_non_ascii_bytes() {
+        // NUL and high bytes stay unchanged; A and z exercise both ASCII cases.
+        let needle = [0, b'A', b'z', 128, 255];
+        let table = TruffleTable::with_case(true, &needle);
+        let expected = [0, b'A', b'Z', b'a', b'z', 128, 255];
+        for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+            for (column, &flags) in mask.iter().enumerate() {
+                for bit in 0..8 {
+                    let byte = (half * 128 + bit * 16 + column) as u8;
+                    assert_eq!(
+                        flags & (1 << bit) != 0,
+                        expected.contains(&byte),
+                        "byte={byte}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
     fn with_case_true_expands_ascii_letters_only() {
-        for_each_needle(|needle| {
-            let table = TruffleTable::with_case(true, needle);
-            let actual: Vec<u8> = table.needle().collect();
+        // @, [, ` and { sit directly outside the ASCII letter ranges.
+        let needle = b"@Az[`{";
+        let expected = b"@AZ[`az{";
+        let table = TruffleTable::with_case(true, needle);
+        // In each half, column c and bit r encode byte half*128 + r*16 + c.
+        // Inspect those stored bits without calling search() or needle().
+        for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+            for (column, &flags) in mask.iter().enumerate() {
+                for bit in 0..8 {
+                    let byte = (half * 128 + bit * 16 + column) as u8;
+                    assert_eq!(
+                        flags & (1 << bit) != 0,
+                        expected.contains(&byte),
+                        "byte={byte}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn new_encodes_sets_with_sixteen_distinct_rows() {
+        // Equal nibbles form a 16-byte diagonal; the other 240 bytes form
+        // its complement. Both sets have sixteen distinct row patterns.
+        for on_diagonal in [true, false] {
+            let needle: Vec<u8> = (0..=255u8)
+                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .collect();
+            let table = TruffleTable::new(&needle);
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            needle.contains(&byte),
+                            "byte={byte}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_case_false_preserves_sets_with_sixteen_distinct_rows() {
+        // Equal nibbles form a 16-byte diagonal; the other 240 bytes form
+        // its complement. Both sets have sixteen distinct row patterns.
+        for on_diagonal in [true, false] {
+            let needle: Vec<u8> = (0..=255u8)
+                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .collect();
+            let table = TruffleTable::with_case(false, &needle);
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            needle.contains(&byte),
+                            "byte={byte}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn with_case_true_expands_sets_with_sixteen_distinct_rows() {
+        // Equal nibbles form a 16-byte diagonal; the other 240 bytes form
+        // its complement. Both sets have sixteen distinct row patterns.
+        for on_diagonal in [true, false] {
+            let needle: Vec<u8> = (0..=255u8)
+                .filter(|byte| (byte / 16 == byte % 16) == on_diagonal)
+                .collect();
+            let table = TruffleTable::with_case(true, &needle);
             let expected: Vec<u8> = needle
                 .iter()
                 .flat_map(|byte| [byte.to_ascii_lowercase(), byte.to_ascii_uppercase()])
                 .collect();
-            for byte in 0..=255u8 {
-                assert_eq!(
-                    actual.contains(&byte),
-                    expected.contains(&byte),
-                    "byte {byte}"
-                );
+            for (half, mask) in [table.lower, table.upper].iter().enumerate() {
+                for (column, &flags) in mask.iter().enumerate() {
+                    for bit in 0..8 {
+                        let byte = (half * 128 + bit * 16 + column) as u8;
+                        assert_eq!(
+                            flags & (1 << bit) != 0,
+                            expected.contains(&byte),
+                            "byte={byte}"
+                        );
+                    }
+                }
             }
-        });
+        }
     }
 
-    // Supply inputs to each constructor test; the caller checks its expected set.
-    fn for_each_needle(mut visit: impl FnMut(&[u8])) {
-        // Duplicate each possible byte to exercise repeated insertion at every
-        // bit position, including all ASCII letters and nonletters.
-        for member in 0..=255u8 {
-            let needle = [member, member];
-            visit(&needle);
+    #[test]
+    fn search_reads_the_lower_half() {
+        let mut lower = [0; 16];
+        lower[0] = 1 << 0; // Byte 0: first byte of the lower half.
+        lower[15] = 1 << 7; // Byte 127: last byte of the lower half.
+        let table = TruffleTable {
+            lower,
+            upper: [0; 16],
+        };
+        for byte in 0..=255 {
+            assert_eq!(table.search(byte), byte == 0 || byte == 127, "byte={byte}");
         }
+    }
 
-        // Every possible byte: all membership bits should be set.
-        let all: Vec<u8> = (0..=255u8).collect();
-        // n << 4 fills the high four bits; adding n fills the low four bits.
-        // Since n < 16, the two parts do not overlap and addition has no carry.
-        // For n = 3: (0b0011 << 4) + 0b0011 = 0b0011_0011.
-        // Viewing high/low nibbles as row/column coordinates, these 16 bytes
-        // lie on the diagonal. They span both table halves and all 16 indices.
-        let diagonal: Vec<u8> = (0..16).map(|n| (n << 4) + n).collect();
-        // The remaining 240 bytes give a dense input opposite to the sparse
-        // diagonal. With case folding, an excluded letter can be added back
-        // if its opposite case belongs to this input.
-        let complement: Vec<u8> = all
-            .iter()
-            .copied()
-            .filter(|b| !diagonal.contains(b))
-            .collect();
-        for needle in [
-            b"".as_slice(),      // Empty set: every membership bit is clear.
-            b"baba",             // Repeated, unordered input for the same two letters.
-            &[0, 127, 128, 255], // First and last byte of each table half.
-            &diagonal,           // Sparse set with equal high and low nibbles.
-            &complement,         // Dense set containing all other bytes.
-            &all,                // Full set: every byte belongs to the needle.
-        ] {
-            visit(needle);
+    #[test]
+    fn search_reads_the_upper_half() {
+        let mut upper = [0; 16];
+        upper[0] = 1 << 0; // Byte 128: first byte of the upper half.
+        upper[15] = 1 << 7; // Byte 255: last byte of the upper half.
+        let table = TruffleTable {
+            lower: [0; 16],
+            upper,
+        };
+        for byte in 0..=255 {
+            assert_eq!(
+                table.search(byte),
+                byte == 128 || byte == 255,
+                "byte={byte}"
+            );
         }
     }
 
     #[test]
     fn needle_yields_bytes_in_ascending_order() {
-        let table = TruffleTable::new(&[255, b'b', 0, b'A', 128]);
-        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
-    }
-
-    #[test]
-    fn needle_omits_duplicate_input_bytes() {
-        let table = TruffleTable::new(b"aaaa");
-        assert!(table.needle().eq(*b"a"));
-    }
-
-    #[test]
-    fn search_reads_both_table_halves() {
         let mut lower = [0; 16];
         let mut upper = [0; 16];
-        lower[0] = 0b00000001;
-        lower[15] = 0b10000000;
-        upper[0] = 0b00000001;
-        upper[15] = 0b10000000;
+        // Lower-half bytes: column 0/bit 0 = 0, column 1/bit 4 = A,
+        // column 2/bit 6 = b. The upper half adds 128 to those coordinates.
+        lower[0] = 1;
+        lower[1] = 1 << 4;
+        lower[2] = 1 << 6;
+        upper[0] = 1; // 128
+        upper[15] = 1 << 7; // 255
         let table = TruffleTable { lower, upper };
-        for byte in 0..=255 {
-            assert_eq!(table.search(byte), [0, 127, 128, 255].contains(&byte));
-        }
+
+        assert!(table.needle().eq([0, b'A', b'b', 128, 255]));
     }
 }

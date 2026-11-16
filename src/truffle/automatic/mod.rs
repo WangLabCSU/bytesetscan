@@ -284,6 +284,7 @@ mod tests {
     use std::{vec, vec::Vec};
 
     use super::Truffle;
+    use crate::tests::hyperscan_needle_and_haystack;
 
     #[test]
     fn find_returns_the_first_member() {
@@ -344,9 +345,21 @@ mod tests {
     }
 
     #[test]
+    fn find_returns_none_for_an_empty_haystack() {
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        for needle in [b"".as_slice(), b"a", all_bytes.as_slice()] {
+            let matcher = Truffle::new(needle);
+            assert_eq!(matcher.find(b""), None, "needle={needle:?}");
+        }
+    }
+
+    #[test]
     fn find_returns_none_for_an_empty_needle() {
         let matcher = Truffle::new(b"");
         assert_eq!(matcher.find(b"abc"), None);
+        // Also search all byte values, spanning multiple SIMD blocks.
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(matcher.find(&all_bytes), None);
     }
 
     #[test]
@@ -354,6 +367,8 @@ mod tests {
         let needle: Vec<u8> = (0..=255).collect();
         let matcher = Truffle::new(&needle);
         assert_eq!(matcher.find(b"abc"), Some(0));
+        // Also search all byte values, spanning multiple SIMD blocks.
+        assert_eq!(matcher.find(&needle), Some(0));
     }
 
     #[test]
@@ -390,6 +405,25 @@ mod tests {
                 None,
                 "end, len={len}"
             );
+        }
+    }
+
+    #[test]
+    fn find_returns_expected_positions() {
+        for (needle, haystack) in hyperscan_needle_and_haystack() {
+            let matcher = Truffle::new(&needle);
+            let expected = haystack.iter().position(|byte| needle.contains(byte));
+            // Exercise every start alignment of the widest (64-byte) vector.
+            let mut storage = vec![0; haystack.len() + 63];
+            for offset in 0..64 {
+                let input = &mut storage[offset..offset + haystack.len()];
+                input.copy_from_slice(&haystack);
+                assert_eq!(
+                    matcher.find(input),
+                    expected,
+                    "needle={needle:?}, haystack={haystack:?}, offset={offset}"
+                );
+            }
         }
     }
 
@@ -449,9 +483,21 @@ mod tests {
     }
 
     #[test]
+    fn mismatch_returns_none_for_an_empty_haystack() {
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        for needle in [b"".as_slice(), b"a", all_bytes.as_slice()] {
+            let matcher = Truffle::new(needle);
+            assert_eq!(matcher.mismatch(b""), None, "needle={needle:?}");
+        }
+    }
+
+    #[test]
     fn mismatch_returns_first_position_for_an_empty_needle() {
         let matcher = Truffle::new(b"");
         assert_eq!(matcher.mismatch(b"abc"), Some(0));
+        // Also search all byte values, spanning multiple SIMD blocks.
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(matcher.mismatch(&all_bytes), Some(0));
     }
 
     #[test]
@@ -459,6 +505,8 @@ mod tests {
         let needle: Vec<u8> = (0..=255).collect();
         let matcher = Truffle::new(&needle);
         assert_eq!(matcher.mismatch(b"abc"), None);
+        // Also search all byte values, spanning multiple SIMD blocks.
+        assert_eq!(matcher.mismatch(&needle), None);
     }
 
     #[test]
@@ -499,6 +547,25 @@ mod tests {
                 None,
                 "end, len={len}"
             );
+        }
+    }
+
+    #[test]
+    fn mismatch_returns_expected_positions() {
+        for (needle, haystack) in hyperscan_needle_and_haystack() {
+            let matcher = Truffle::new(&needle);
+            let expected = haystack.iter().position(|byte| !needle.contains(byte));
+            // Exercise every start alignment of the widest (64-byte) vector.
+            let mut storage = vec![0; haystack.len() + 63];
+            for offset in 0..64 {
+                let input = &mut storage[offset..offset + haystack.len()];
+                input.copy_from_slice(&haystack);
+                assert_eq!(
+                    matcher.mismatch(input),
+                    expected,
+                    "needle={needle:?}, haystack={haystack:?}, offset={offset}"
+                );
+            }
         }
     }
 
@@ -561,9 +628,21 @@ mod tests {
     }
 
     #[test]
+    fn rfind_returns_none_for_an_empty_haystack() {
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        for needle in [b"".as_slice(), b"a", all_bytes.as_slice()] {
+            let matcher = Truffle::new(needle);
+            assert_eq!(matcher.rfind(b""), None, "needle={needle:?}");
+        }
+    }
+
+    #[test]
     fn rfind_returns_none_for_an_empty_needle() {
         let matcher = Truffle::new(b"");
         assert_eq!(matcher.rfind(b"abc"), None);
+        // Also search all byte values, spanning multiple SIMD blocks.
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(matcher.rfind(&all_bytes), None);
     }
 
     #[test]
@@ -571,6 +650,8 @@ mod tests {
         let needle: Vec<u8> = (0..=255).collect();
         let matcher = Truffle::new(&needle);
         assert_eq!(matcher.rfind(b"abc"), Some(2));
+        // Also search all byte values, spanning multiple SIMD blocks.
+        assert_eq!(matcher.rfind(&needle), Some(255));
     }
 
     #[test]
@@ -607,6 +688,25 @@ mod tests {
                 None,
                 "end, len={len}"
             );
+        }
+    }
+
+    #[test]
+    fn rfind_returns_expected_positions() {
+        for (needle, haystack) in hyperscan_needle_and_haystack() {
+            let matcher = Truffle::new(&needle);
+            let expected = haystack.iter().rposition(|byte| needle.contains(byte));
+            // Exercise every start alignment of the widest (64-byte) vector.
+            let mut storage = vec![0; haystack.len() + 63];
+            for offset in 0..64 {
+                let input = &mut storage[offset..offset + haystack.len()];
+                input.copy_from_slice(&haystack);
+                assert_eq!(
+                    matcher.rfind(input),
+                    expected,
+                    "needle={needle:?}, haystack={haystack:?}, offset={offset}"
+                );
+            }
         }
     }
 
@@ -666,9 +766,21 @@ mod tests {
     }
 
     #[test]
+    fn rmismatch_returns_none_for_an_empty_haystack() {
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        for needle in [b"".as_slice(), b"a", all_bytes.as_slice()] {
+            let matcher = Truffle::new(needle);
+            assert_eq!(matcher.rmismatch(b""), None, "needle={needle:?}");
+        }
+    }
+
+    #[test]
     fn rmismatch_returns_last_position_for_an_empty_needle() {
         let matcher = Truffle::new(b"");
         assert_eq!(matcher.rmismatch(b"abc"), Some(2));
+        // Also search all byte values, spanning multiple SIMD blocks.
+        let all_bytes: Vec<u8> = (0..=255).collect();
+        assert_eq!(matcher.rmismatch(&all_bytes), Some(255));
     }
 
     #[test]
@@ -676,6 +788,8 @@ mod tests {
         let needle: Vec<u8> = (0..=255).collect();
         let matcher = Truffle::new(&needle);
         assert_eq!(matcher.rmismatch(b"abc"), None);
+        // Also search all byte values, spanning multiple SIMD blocks.
+        assert_eq!(matcher.rmismatch(&needle), None);
     }
 
     #[test]
@@ -716,6 +830,25 @@ mod tests {
                 None,
                 "end, len={len}"
             );
+        }
+    }
+
+    #[test]
+    fn rmismatch_returns_expected_positions() {
+        for (needle, haystack) in hyperscan_needle_and_haystack() {
+            let matcher = Truffle::new(&needle);
+            let expected = haystack.iter().rposition(|byte| !needle.contains(byte));
+            // Exercise every start alignment of the widest (64-byte) vector.
+            let mut storage = vec![0; haystack.len() + 63];
+            for offset in 0..64 {
+                let input = &mut storage[offset..offset + haystack.len()];
+                input.copy_from_slice(&haystack);
+                assert_eq!(
+                    matcher.rmismatch(input),
+                    expected,
+                    "needle={needle:?}, haystack={haystack:?}, offset={offset}"
+                );
+            }
         }
     }
 
