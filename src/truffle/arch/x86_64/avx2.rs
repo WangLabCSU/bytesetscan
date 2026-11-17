@@ -63,12 +63,7 @@ unsafe fn search<const REVERT: bool>(
 
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(lower, upper, _mm256_loadu_si256(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(lower, upper, _mm256_loadu_si256(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             return Some(mask.trailing_zeros() as usize);
@@ -84,12 +79,7 @@ unsafe fn search<const REVERT: bool>(
         while start < last {
             // Read 32 bytes from the 32-byte-aligned interior address selected
             // by start/end; an aligned load still needs the full vector in bounds.
-            let mut mask = mask32(lower, upper, _mm256_load_si256(ptr.add(start).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask32::<REVERT>(lower, upper, _mm256_load_si256(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -99,12 +89,7 @@ unsafe fn search<const REVERT: bool>(
         }
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(lower, upper, _mm256_loadu_si256(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(lower, upper, _mm256_loadu_si256(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
@@ -176,12 +161,7 @@ unsafe fn rsearch<const REVERT: bool>(
         let last = len - 32;
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(lower, upper, _mm256_loadu_si256(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(lower, upper, _mm256_loadu_si256(ptr.add(last).cast()));
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
@@ -199,12 +179,7 @@ unsafe fn rsearch<const REVERT: bool>(
             end -= 32;
             // Read 32 bytes from the 32-byte-aligned interior address selected
             // by start/end; an aligned load still needs the full vector in bounds.
-            let mut mask = mask32(lower, upper, _mm256_load_si256(ptr.add(end).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask32::<REVERT>(lower, upper, _mm256_load_si256(ptr.add(end).cast()));
             if mask != 0 {
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
@@ -214,12 +189,7 @@ unsafe fn rsearch<const REVERT: bool>(
         }
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(lower, upper, _mm256_loadu_si256(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(lower, upper, _mm256_loadu_si256(ptr.cast()));
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
@@ -252,12 +222,7 @@ unsafe fn mask32_overlap<const REVERT: bool>(
         // lane 1 supplies the upper 128 bits, initializing all 32 byte lanes.
         // For 31 bytes, their input positions are [0, ..., 15 | 15, ..., 30].
         let bytes = _mm256_inserti128_si256::<1>(_mm256_castsi128_si256(prefix), suffix);
-        let mut mask = mask32(lower, upper, bytes);
-        if !REVERT {
-            // Select members before relocating the suffix. All thirty-two
-            // flags describe real input bytes, including duplicated positions.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(lower, upper, bytes);
         // Bits 0..15 already refer to the prefix's original positions. Move
         // the upper sixteen flags to the suffix's starting position, len - 16.
         // Duplicate bytes have identical flags, so OR merges their results;
@@ -267,8 +232,9 @@ unsafe fn mask32_overlap<const REVERT: bool>(
     }
 }
 
+// Bit i selects byte i: members for find, nonmembers when REVERT is true.
 #[inline(always)]
-unsafe fn mask32(lower: __m128i, upper: __m128i, bytes: __m256i) -> u32 {
+unsafe fn mask32<const REVERT: bool>(lower: __m128i, upper: __m128i, bytes: __m256i) -> u32 {
     // SAFETY: called only from an AVX2 entry point. pshufb zeros a lane
     // when bit 7 of the index is set; flipping that bit selects the half.
     unsafe {
@@ -318,17 +284,42 @@ unsafe fn mask32(lower: __m128i, upper: __m128i, bytes: __m256i) -> u32 {
         // OR combines the mutually exclusive lower/upper lookup results;
         // AND retains only the single membership bit chosen for this byte.
         let member = _mm256_and_si256(_mm256_or_si256(lower, upper), selected);
-        // setzero supplies all-zero bytes. Equality with zero marks absent
-        // membership bits as 0b11111111 and present bits as 0b00000000. movemask packs
-        // each byte's top bit into the corresponding scalar position bit.
-        _mm256_movemask_epi8(_mm256_cmpeq_epi8(member, _mm256_setzero_si256())) as u32
+        // selected contains exactly one nonzero bit in every lane. AND above
+        // therefore leaves either zero or that same bit, including bit 7.
+        // Compare with zero for nonmembers, or with selected for members.
+        // Both paths produce all-one/all-zero bytes without a separate NOT.
+        let matches = if REVERT {
+            _mm256_cmpeq_epi8(member, _mm256_setzero_si256())
+        } else {
+            _mm256_cmpeq_epi8(member, selected)
+        };
+        // Pack the top bit of each comparison result into its byte-position bit.
+        _mm256_movemask_epi8(matches) as u32
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{_mm_loadu_si128, mask32_overlap, rsearch, search};
+    use super::{
+        _mm256_set1_epi8, _mm_loadu_si128, _mm_set1_epi8, mask32, mask32_overlap, rsearch, search,
+    };
     use crate::{truffle::TruffleTable, SimdBackend};
+
+    #[test]
+    fn mask32_selects_the_top_membership_bit_in_either_table() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        // 0x70 and 0xf0 use different tables, but both select membership bit 7.
+        for byte in [0b0111_0000u8, 0b1111_0000] {
+            // SAFETY: AVX2 is available; all vector values are initialized.
+            let actual = unsafe {
+                let table = _mm_set1_epi8(0b1000_0000u8 as i8);
+                mask32::<false>(table, table, _mm256_set1_epi8(byte as i8))
+            };
+            assert_eq!(actual, u32::MAX, "every lane must select byte {byte:#010b}");
+        }
+    }
 
     #[test]
     fn search_returns_none_when_the_overlapping_input_has_no_member() {

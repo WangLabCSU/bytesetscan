@@ -59,12 +59,7 @@ unsafe fn search<const REVERT: bool>(
         if len <= 32 {
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16_avx2(low, high, _mm_loadu_si128(ptr.cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16_avx2::<REVERT>(low, high, _mm_loadu_si128(ptr.cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 return Some(mask.trailing_zeros() as usize);
@@ -72,12 +67,7 @@ unsafe fn search<const REVERT: bool>(
             let last = len - 16;
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16_avx2(low, high, _mm_loadu_si128(ptr.add(last).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16_avx2::<REVERT>(low, high, _mm_loadu_si128(ptr.add(last).cast()));
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -88,12 +78,7 @@ unsafe fn search<const REVERT: bool>(
         }
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(low, high, _mm256_loadu_si256(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(low, high, _mm256_loadu_si256(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             return Some(mask.trailing_zeros() as usize);
@@ -109,12 +94,7 @@ unsafe fn search<const REVERT: bool>(
         while start < last {
             // Read 32 bytes from the 32-byte-aligned interior address selected
             // by start/end; an aligned load still needs the full vector in bounds.
-            let mut mask = mask32(low, high, _mm256_load_si256(ptr.add(start).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask32::<REVERT>(low, high, _mm256_load_si256(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -124,12 +104,7 @@ unsafe fn search<const REVERT: bool>(
         }
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(low, high, _mm256_loadu_si256(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(low, high, _mm256_loadu_si256(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
@@ -196,23 +171,13 @@ unsafe fn rsearch<const REVERT: bool>(
             let last = len - 16;
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16_avx2(low, high, _mm_loadu_si128(ptr.add(last).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16_avx2::<REVERT>(low, high, _mm_loadu_si128(ptr.add(last).cast()));
             if mask != 0 {
                 return Some(last + (31 - (mask as u32).leading_zeros()) as usize);
             }
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16_avx2(low, high, _mm_loadu_si128(ptr.cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16_avx2::<REVERT>(low, high, _mm_loadu_si128(ptr.cast()));
             return if mask != 0 {
                 Some((31 - (mask as u32).leading_zeros()) as usize)
             } else {
@@ -222,12 +187,7 @@ unsafe fn rsearch<const REVERT: bool>(
         let last = len - 32;
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(low, high, _mm256_loadu_si256(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(low, high, _mm256_loadu_si256(ptr.add(last).cast()));
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
@@ -245,12 +205,7 @@ unsafe fn rsearch<const REVERT: bool>(
             end -= 32;
             // Read 32 bytes from the 32-byte-aligned interior address selected
             // by start/end; an aligned load still needs the full vector in bounds.
-            let mut mask = mask32(low, high, _mm256_load_si256(ptr.add(end).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask32::<REVERT>(low, high, _mm256_load_si256(ptr.add(end).cast()));
             if mask != 0 {
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
@@ -260,12 +215,7 @@ unsafe fn rsearch<const REVERT: bool>(
         }
         // Read the 32 bytes starting here without requiring alignment.
         // Overlapping end loads still end exactly at the slice boundary.
-        let mut mask = mask32(low, high, _mm256_loadu_si256(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask32::<REVERT>(low, high, _mm256_loadu_si256(ptr.cast()));
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
@@ -276,8 +226,10 @@ unsafe fn rsearch<const REVERT: bool>(
     }
 }
 
+// Bit i selects byte i: members for find, nonmembers when REVERT is true.
+// Each high-table entry must be zero or contain exactly one group flag.
 #[inline(always)]
-unsafe fn mask32(low: __m128i, high: __m128i, bytes: __m256i) -> u32 {
+unsafe fn mask32<const REVERT: bool>(low: __m128i, high: __m128i, bytes: __m256i) -> u32 {
     // SAFETY: called only from an AVX2 entry point.
     unsafe {
         // set1_epi8 broadcasts 0b00001111 into every byte lane. AND with this
@@ -301,19 +253,27 @@ unsafe fn mask32(low: __m128i, high: __m128i, bytes: __m256i) -> u32 {
             _mm256_broadcastsi128_si256(high),
             _mm256_srli_epi64::<4>(_mm256_andnot_si256(nibble, bytes)),
         );
-        // AND intersects the two sets of allowed groups. cmpeq_epi8 with
-        // a zero vector yields 0b11111111 for a nonmember and 0b00000000 for a member.
-        // movemask_epi8 collects each byte's top bit into scalar bit i;
-        // the cast preserves the meaningful byte-position bits, including the top one.
-        _mm256_movemask_epi8(_mm256_cmpeq_epi8(
-            _mm256_and_si256(low, high),
-            _mm256_setzero_si256(),
-        )) as u32
+        // A nonzero intersection means membership. movemask only consumes
+        // the top bit of each byte, not the remaining seven bits.
+        let member = _mm256_and_si256(low, high);
+        let selected = if REVERT {
+            // Zero becomes 0b11111111; nonzero becomes 0b00000000.
+            _mm256_cmpeq_epi8(member, _mm256_setzero_si256())
+        } else {
+            // Each high-table entry selects at most one group, so member is
+            // zero or a power of two <= 128. Adding 127 cannot overflow:
+            // zero becomes 127 (top bit clear), a member 128..255 (top bit set).
+            _mm256_add_epi8(member, _mm256_set1_epi8(0b0111_1111))
+        };
+        // Pack selected byte i's top bit into scalar bit i; no inversion remains.
+        _mm256_movemask_epi8(selected) as u32
     }
 }
 
+// Both vector halves classify the same sixteen bytes; bit i selects byte i.
+// Each high-table entry must be zero or contain exactly one group flag.
 #[inline(always)]
-unsafe fn mask16_avx2(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
+unsafe fn mask16_avx2<const REVERT: bool>(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
     // SAFETY: called only from an AVX2 entry point. Pack both nibble
     // lookups into one AVX2 shuffle.
     unsafe {
@@ -339,10 +299,55 @@ unsafe fn mask16_avx2(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
             // a nonzero byte precisely when some group accepts both nibbles.
             _mm256_extracti128_si256::<1>(flags),
         );
-        // AND intersects the two sets of allowed groups. cmpeq_epi8 with
-        // a zero vector yields 0b11111111 for a nonmember and 0b00000000 for a member.
-        // movemask_epi8 collects each byte's top bit into scalar bit i;
-        // the cast preserves the meaningful byte-position bits, including the top one.
-        _mm_movemask_epi8(_mm_cmpeq_epi8(member, _mm_setzero_si128())) as u16
+        let selected = if REVERT {
+            // Zero intersections select nonmembers, producing all-one bytes.
+            _mm_cmpeq_epi8(member, _mm_setzero_si128())
+        } else {
+            // The high table selects at most one group, bounding member by 128.
+            // Adding 127 maps zero to 127 and members to 128..255 without
+            // overflow. Only the top bit matters to movemask.
+            _mm_add_epi8(member, _mm_set1_epi8(0b0111_1111))
+        };
+        _mm_movemask_epi8(selected) as u16
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{_mm256_setzero_si256, _mm_set1_epi8, _mm_setzero_si128, mask16_avx2, mask32};
+    use crate::SimdBackend;
+
+    #[test]
+    fn mask32_selects_each_group_flag() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        // Exercise every group, including bit 7: 128 + 127 must select the lane.
+        for group in 0..8 {
+            let flag = 1u8 << group;
+            // SAFETY: AVX2 is available; all vector values are initialized.
+            let actual = unsafe {
+                let table = _mm_set1_epi8(flag as i8);
+                mask32::<false>(table, table, _mm256_setzero_si256())
+            };
+            assert_eq!(actual, u32::MAX, "every lane must select flag {flag:#010b}");
+        }
+    }
+
+    #[test]
+    fn mask16_avx2_selects_each_group_flag() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        // The combined lookup must select all eight possible group flags.
+        for group in 0..8 {
+            let flag = 1u8 << group;
+            // SAFETY: AVX2 is available; all vector values are initialized.
+            let actual = unsafe {
+                let table = _mm_set1_epi8(flag as i8);
+                mask16_avx2::<false>(table, table, _mm_setzero_si128())
+            };
+            assert_eq!(actual, u16::MAX, "every lane must select flag {flag:#010b}");
+        }
     }
 }

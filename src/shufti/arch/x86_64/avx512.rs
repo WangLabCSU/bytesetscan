@@ -45,12 +45,7 @@ unsafe fn search512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mut mask = mask64::<REVERT>(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             // Discard positions outside the actual input, including any padding
             // whose zero byte happened to satisfy the selected predicate.
             mask &= valid;
@@ -73,12 +68,7 @@ unsafe fn search512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mut mask = mask64::<REVERT>(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             // Discard positions outside the actual input, including any padding
             // whose zero byte happened to satisfy the selected predicate.
             mask &= valid;
@@ -93,12 +83,7 @@ unsafe fn search512<const REVERT: bool>(
         while start < aligned_end {
             // Load all 64 bytes from the 64-byte-aligned interior position;
             // the loop bounds also guarantee a complete vector remains.
-            let mut mask = mask64(low, high, _mm512_load_si512(ptr.add(start).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask64::<REVERT>(low, high, _mm512_load_si512(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -112,12 +97,7 @@ unsafe fn search512<const REVERT: bool>(
         let last = len - 64;
         // Load all 64 bytes at this address without an alignment requirement.
         // The full-vector path keeps the entire read inside haystack.
-        let mut mask = mask64(low, high, _mm512_loadu_si512(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask64::<REVERT>(low, high, _mm512_loadu_si512(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
@@ -167,12 +147,7 @@ unsafe fn rsearch512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mut mask = mask64::<REVERT>(low, high, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             // Inactive zero-filled lanes must not appear in either search.
             // Discard positions outside the actual input, including any padding
             // whose zero byte happened to satisfy the selected predicate.
@@ -197,16 +172,11 @@ unsafe fn rsearch512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(
+            let mut mask = mask64::<REVERT>(
                 low,
                 high,
                 _mm512_maskz_loadu_epi8(valid, ptr.add(end).cast()),
             );
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
             // Discard positions outside the actual input, including any padding
             // whose zero byte happened to satisfy the selected predicate.
             mask &= valid;
@@ -226,12 +196,7 @@ unsafe fn rsearch512<const REVERT: bool>(
             end -= 64;
             // Load all 64 bytes from the 64-byte-aligned interior position;
             // the loop bounds also guarantee a complete vector remains.
-            let mut mask = mask64(low, high, _mm512_load_si512(ptr.add(end).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask64::<REVERT>(low, high, _mm512_load_si512(ptr.add(end).cast()));
             if mask != 0 {
                 // 63 - leading_zeros locates the highest set bit in this u64,
                 // which identifies the last selected byte lane.
@@ -245,12 +210,7 @@ unsafe fn rsearch512<const REVERT: bool>(
         // len >= 64 guarantees a full prefix; the overlap has already failed.
         // Load all 64 bytes at this address without an alignment requirement.
         // The full-vector path keeps the entire read inside haystack.
-        let mut mask = mask64(low, high, _mm512_loadu_si512(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask64::<REVERT>(low, high, _mm512_loadu_si512(ptr.cast()));
         if mask != 0 {
             // 63 - leading_zeros locates the highest set bit in this u64,
             // which identifies the last selected byte lane.
@@ -261,8 +221,9 @@ unsafe fn rsearch512<const REVERT: bool>(
     }
 }
 
+// Bit i selects byte i: members for find, nonmembers when REVERT is true.
 #[inline(always)]
-unsafe fn mask64(low: __m128i, high: __m128i, bytes: __m512i) -> u64 {
+unsafe fn mask64<const REVERT: bool>(low: __m128i, high: __m128i, bytes: __m512i) -> u64 {
     // SAFETY: the caller has established AVX-512F/BW support.
     unsafe {
         // set1_epi8 broadcasts 0b00001111 into every byte lane. AND with this
@@ -286,9 +247,15 @@ unsafe fn mask64(low: __m128i, high: __m128i, bytes: __m512i) -> u64 {
             _mm512_broadcast_i32x4(high),
             _mm512_srli_epi64::<4>(_mm512_andnot_si512(nibble, bytes)),
         );
-        // AND intersects the low/high group flags. Compare each result
-        // with zero: cmpeq_epi8_mask directly produces 64 scalar predicate
-        // bits (1 = nonmember), without a separate byte movemask step.
-        _mm512_cmpeq_epi8_mask(_mm512_and_si512(low, high), _mm512_setzero_si512())
+        // Intersect the low/high group flags. A nonzero byte is a member.
+        let member = _mm512_and_si512(low, high);
+        // AVX-512 compares directly into a 64-bit predicate mask. Select
+        // equality for nonmembers or inequality for members; neither needs
+        // a separate movemask or inversion. REVERT is a compile-time choice.
+        if REVERT {
+            _mm512_cmpeq_epi8_mask(member, _mm512_setzero_si512())
+        } else {
+            _mm512_cmpneq_epi8_mask(member, _mm512_setzero_si512())
+        }
     }
 }

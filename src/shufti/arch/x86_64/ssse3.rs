@@ -53,12 +53,7 @@ unsafe fn search128<const REVERT: bool>(
         let len = haystack.len();
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(low, high, _mm_loadu_si128(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_loadu_si128(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             return Some(mask.trailing_zeros() as usize);
@@ -74,12 +69,7 @@ unsafe fn search128<const REVERT: bool>(
         while start < last {
             // Load sixteen bytes from the 16-byte-aligned interior address;
             // the loop excludes positions without a complete input vector.
-            let mut mask = mask16(low, high, _mm_load_si128(ptr.add(start).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16::<REVERT>(low, high, _mm_load_si128(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -89,12 +79,7 @@ unsafe fn search128<const REVERT: bool>(
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(low, high, _mm_loadu_si128(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_loadu_si128(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
@@ -157,12 +142,7 @@ unsafe fn rsearch128<const REVERT: bool>(
         let last = len - 16;
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(low, high, _mm_loadu_si128(ptr.add(last).cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_loadu_si128(ptr.add(last).cast()));
         if mask != 0 {
             return Some(last + (31 - (mask as u32).leading_zeros()) as usize);
         }
@@ -177,24 +157,14 @@ unsafe fn rsearch128<const REVERT: bool>(
             end -= 16;
             // Load sixteen bytes from the 16-byte-aligned interior address;
             // the loop excludes positions without a complete input vector.
-            let mut mask = mask16(low, high, _mm_load_si128(ptr.add(end).cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
+            let mask = mask16::<REVERT>(low, high, _mm_load_si128(ptr.add(end).cast()));
             if mask != 0 {
                 return Some(end + (31 - (mask as u32).leading_zeros()) as usize);
             }
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(low, high, _mm_loadu_si128(ptr.cast()));
-        if !REVERT {
-            // Convert the classifier's nonmember bits into member bits. This
-            // changes the predicate only; forward/reverse bit ordering is unchanged.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_loadu_si128(ptr.cast()));
         if mask != 0 {
             Some((31 - (mask as u32).leading_zeros()) as usize)
         } else {
@@ -280,17 +250,12 @@ unsafe fn mask8_overlap<const REVERT: bool>(low: __m128i, high: __m128i, haystac
         let suffix = _mm_loadu_si32(ptr.add(last).cast());
         // Interleave the low 32-bit lanes. For len = 7, the first eight bytes
         // are input positions [0, 1, 2, 3 | 3, 4, 5, 6]; the rest are zero.
-        let mut mask = mask16(low, high, _mm_unpacklo_epi32(prefix, suffix)) as u8;
-        if !REVERT {
-            // Select members before merging the two four-byte masks. Every
-            // retained bit still describes a real byte in one of the loads.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_unpacklo_epi32(prefix, suffix)) as u8;
         // Casting discards flags from the eight zero-filled lanes. Keep
         // prefix bits 0..3, then relocate suffix bits 4..7 to last..len.
         // Duplicate input positions have identical flags, so OR merges them.
-        // The suffix's highest bit lands at last + 3 == len - 1. Thus even
-        // after inversion, no bit can escape the actual input range.
+        // The suffix's highest bit lands at last + 3 == len - 1, leaving
+        // bits beyond the input clear for either predicate.
         (mask & 0b0000_1111) | ((mask >> 4) << last)
     }
 }
@@ -311,12 +276,7 @@ unsafe fn mask16_overlap<const REVERT: bool>(low: __m128i, high: __m128i, haysta
         let suffix = _mm_loadl_epi64(ptr.add(last).cast());
         // Combine the low 64 bits of each load. For len = 15, the vector
         // contains input positions [0, ..., 7 | 7, ..., 14].
-        let mut mask = mask16(low, high, _mm_unpacklo_epi64(prefix, suffix));
-        if !REVERT {
-            // Select members while all sixteen bits still describe real
-            // input bytes. Relocating the suffix then removes the overlap.
-            mask = !mask;
-        }
+        let mask = mask16::<REVERT>(low, high, _mm_unpacklo_epi64(prefix, suffix));
         // Keep the prefix flags; relocate suffix bits 8..15 to last..len.
         // Overlapping positions have identical flags, so OR merges them.
         // The suffix's highest bit lands at last + 7 == len - 1, leaving
@@ -325,8 +285,10 @@ unsafe fn mask16_overlap<const REVERT: bool>(low: __m128i, high: __m128i, haysta
     }
 }
 
+// Bit i selects byte i: members for find, nonmembers when REVERT is true.
+// Each high-table entry must be zero or contain exactly one group flag.
 #[inline(always)]
-unsafe fn mask16(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
+unsafe fn mask16<const REVERT: bool>(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
     // SAFETY: the caller has established SSSE3 support.
     unsafe {
         // set1_epi8 broadcasts 0b00001111 into every byte lane. AND with this
@@ -341,20 +303,50 @@ unsafe fn mask16(low: __m128i, high: __m128i, bytes: __m128i) -> u16 {
         // 64-bit lanes. This prevents a neighboring byte's low nibble from
         // spilling into this byte; the resulting indices are exactly b >> 4.
         let high = _mm_shuffle_epi8(high, _mm_srli_epi64::<4>(_mm_andnot_si128(nibble, bytes)));
-        // Compare the intersected flags with a zero vector: 0b11111111 marks
-        // a nonmember and 0b00000000 a member. movemask packs the sixteen byte
-        // sign bits into the low sixteen bits of its i32 result; cast to u16.
-        _mm_movemask_epi8(_mm_cmpeq_epi8(
-            _mm_and_si128(low, high),
-            _mm_setzero_si128(),
-        )) as u16
+        // A nonzero intersection means membership. Only each byte's top bit
+        // is consumed by movemask, so member flags need not become all ones.
+        let member = _mm_and_si128(low, high);
+        let selected = if REVERT {
+            // Zero becomes 0b11111111; nonzero becomes 0b00000000.
+            _mm_cmpeq_epi8(member, _mm_setzero_si128())
+        } else {
+            // ShuftiTable gives each high nibble at most one group flag.
+            // The intersection is therefore zero or a power of two <= 128.
+            // Adding 127 cannot overflow: zero becomes 127 (top bit clear),
+            // and a member becomes 128..255 (top bit set). Other output bits
+            // are irrelevant to movemask; no packed-mask inversion is needed.
+            _mm_add_epi8(member, _mm_set1_epi8(0b0111_1111))
+        };
+        // Pack each byte's top bit into bit i, then retain exactly sixteen bits.
+        _mm_movemask_epi8(selected) as u16
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{_mm_loadu_si128, mask16_overlap, mask8_overlap, rsearch_short, search_short};
+    use super::{
+        _mm_loadu_si128, _mm_set1_epi8, _mm_setzero_si128, mask16, mask16_overlap, mask8_overlap,
+        rsearch_short, search_short,
+    };
     use crate::{shufti::ShuftiTable, SimdBackend};
+
+    #[test]
+    fn mask16_selects_each_group_flag() {
+        if !SimdBackend::Ssse3.is_available() {
+            return;
+        }
+        // A high-table entry selects one of eight groups. Include bit 7,
+        // which a signed greater-than-zero comparison would incorrectly reject.
+        for group in 0..8 {
+            let flag = 1u8 << group;
+            // SAFETY: SSSE3 is available; the initialized vectors need no loads.
+            let actual = unsafe {
+                let table = _mm_set1_epi8(flag as i8);
+                mask16::<false>(table, table, _mm_setzero_si128())
+            };
+            assert_eq!(actual, u16::MAX, "every lane must select flag {flag:#010b}");
+        }
+    }
 
     #[test]
     fn search_short_returns_none_when_no_bytes_match() {

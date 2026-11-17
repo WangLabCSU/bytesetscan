@@ -139,6 +139,8 @@ impl ShuftiTable {
                 // high[h] selects the group for this high-four-bit value.
                 // Here high[4] = high[6] = 0b00000001;
                 // high[5] = high[7] = 0b00000010.
+                // Keep exactly one flag here. SIMD membership classification
+                // relies on low[l] & high[h] being zero or a power of two <= 128.
                 high[h] = flag;
 
                 // low[l] records all groups that allow low value l. Add this
