@@ -13,6 +13,10 @@ pub(in super::super) fn truffle_avx2<const REVERT: bool>(
     upper: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
+    // Two overlapping four-byte loads require at least four input bytes.
+    if haystack.len() < 4 {
+        return super::super::search_fallback::<REVERT>(lower, upper, haystack);
+    }
     // SAFETY: dispatch establishes CPU support; the scan handles short inputs.
     // Both table arrays provide one initialized 16-byte vector.
     unsafe {
@@ -30,14 +34,14 @@ pub(in super::super) fn truffle_avx2<const REVERT: bool>(
 
 #[inline(always)]
 unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
-    // SAFETY: the entry point establishes AVX2 support.
+    // SAFETY: the entry point establishes AVX2 support and len >= 4.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
         if len < 16 {
-            // SAFETY: the input is shorter than 16 bytes. AVX2 provides the
+            // SAFETY: 4 <= len < 16. AVX2 provides the
             // SSSE3 instructions used by this shared, inlined short-input scan.
             return search_short::<REVERT>(lower, upper, haystack);
         }
@@ -119,6 +123,10 @@ pub(in super::super) fn rtruffle_avx2<const REVERT: bool>(
     upper: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
+    // Two overlapping four-byte loads require at least four input bytes.
+    if haystack.len() < 4 {
+        return super::super::rsearch_fallback::<REVERT>(lower, upper, haystack);
+    }
     // SAFETY: dispatch establishes CPU support; the scan handles short inputs.
     // Both table arrays provide one initialized 16-byte vector.
     unsafe {
@@ -138,14 +146,14 @@ pub(in super::super) fn rtruffle_avx2<const REVERT: bool>(
 // then an overlapping prefix. The highest set bit identifies the last match.
 #[inline(always)]
 unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
-    // SAFETY: the entry point establishes AVX2 support.
+    // SAFETY: the entry point establishes AVX2 support and len >= 4.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
         if len < 16 {
-            // SAFETY: the input is shorter than 16 bytes. AVX2 provides the
+            // SAFETY: 4 <= len < 16. AVX2 provides the
             // SSSE3 instructions used by this shared, inlined short-input scan.
             return rsearch_short::<REVERT>(lower, upper, haystack);
         }

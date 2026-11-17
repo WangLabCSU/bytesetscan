@@ -13,12 +13,12 @@ pub(in super::super) fn shufti_avx2<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    if haystack.len() < 8 {
+    if haystack.len() < 4 {
         return super::super::search_fallback::<REVERT>(low, high, haystack);
     }
     if haystack.len() < 16 {
         // SAFETY: AVX2 enables SSSE3; both table loads are in bounds and
-        // the checks above establish the helper's 8..15-byte input range.
+        // the checks above establish the helper's 4..15-byte input range.
         return unsafe {
             search_short::<REVERT>(
                 _mm_loadu_si128(low.as_ptr().cast()),
@@ -143,12 +143,12 @@ pub(in super::super) fn rshufti_avx2<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    if haystack.len() < 8 {
+    if haystack.len() < 4 {
         return super::super::rsearch_fallback::<REVERT>(low, high, haystack);
     }
     if haystack.len() < 16 {
         // SAFETY: AVX2 enables SSSE3; both table loads are in bounds and
-        // the checks above establish the helper's 8..15-byte input range.
+        // the checks above establish the helper's 4..15-byte input range.
         return unsafe {
             rsearch_short::<REVERT>(
                 _mm_loadu_si128(low.as_ptr().cast()),

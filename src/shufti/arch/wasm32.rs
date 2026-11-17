@@ -8,11 +8,11 @@ pub(super) fn search<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    if haystack.len() < 8 {
+    if haystack.len() < 4 {
         return super::search_fallback::<REVERT>(low, high, haystack);
     }
     // SAFETY: dispatch establishes SIMD support; the check above ensures
-    // at least eight input bytes before entering the vector scan.
+    // at least four input bytes before entering the vector scan.
     // Table loads and every scan load below stay within initialized slices.
     unsafe {
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
@@ -56,11 +56,21 @@ pub(super) fn search<const REVERT: bool>(
 unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping suffix.
-    // SAFETY: the entry point establishes SIMD support and len >= 8.
-    // Short inputs use two overlapping eight-byte loads; full loads stay in bounds.
+    // SAFETY: the entry point establishes SIMD support and len >= 4.
+    // Short inputs use overlapping four-byte or eight-byte loads;
+    // full-vector loads stay inside haystack.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
+        if len < 8 {
+            // The entry point and this branch establish 4 <= len < 8.
+            let mask = mask8_overlap(haystack, classify);
+            return if mask != 0 {
+                mask.trailing_zeros() as usize
+            } else {
+                len
+            };
+        }
         if len < 16 {
             // SAFETY: 8 <= len < 16; classify returns independent byte flags.
             let mask = mask16_overlap(haystack, classify);
@@ -71,8 +81,8 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             };
         }
         // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // does not require a 16-byte-aligned address. The scan bounds
+        // guarantee all sixteen bytes exist.
         let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
@@ -86,8 +96,8 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         let last = len - 16;
         while start < last {
             // Read sixteen consecutive input bytes into a vector; this load
-            // does not require a 16-byte-aligned address. The scan bounds or
-            // initialized short-input buffer guarantee all sixteen bytes exist.
+            // does not require a 16-byte-aligned address. The scan bounds
+            // guarantee all sixteen bytes exist.
             let mask = classify(v128_load(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
@@ -97,8 +107,8 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             start += 16;
         }
         // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // does not require a 16-byte-aligned address. The scan bounds
+        // guarantee all sixteen bytes exist.
         let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
@@ -115,11 +125,11 @@ pub(super) fn rsearch<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    if haystack.len() < 8 {
+    if haystack.len() < 4 {
         return super::rsearch_fallback::<REVERT>(low, high, haystack);
     }
     // SAFETY: dispatch establishes SIMD support; the check above ensures
-    // at least eight input bytes before entering the vector scan.
+    // at least four input bytes before entering the vector scan.
     // Table loads and every scan load below stay within initialized slices.
     unsafe {
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
@@ -163,11 +173,22 @@ pub(super) fn rsearch<const REVERT: bool>(
 unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping prefix.
-    // SAFETY: the entry point establishes SIMD support and len >= 8.
-    // Short inputs use two overlapping eight-byte loads; full loads stay in bounds.
+    // SAFETY: the entry point establishes SIMD support and len >= 4.
+    // Short inputs use overlapping four-byte or eight-byte loads;
+    // full-vector loads stay inside haystack.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
+        if len < 8 {
+            // The entry point and this branch establish 4 <= len < 8.
+            let mask = mask8_overlap(haystack, classify);
+            return if mask != 0 {
+                // This mask has eight bits: bit 7 is its highest position.
+                7 - mask.leading_zeros() as usize
+            } else {
+                len
+            };
+        }
         if len < 16 {
             // SAFETY: 8 <= len < 16; classify returns independent byte flags.
             let mask = mask16_overlap(haystack, classify);
@@ -179,8 +200,8 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         }
         let last = len - 16;
         // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // does not require a 16-byte-aligned address. The scan bounds
+        // guarantee all sixteen bytes exist.
         let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
@@ -195,8 +216,8 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         while end > 16 {
             end -= 16;
             // Read sixteen consecutive input bytes into a vector; this load
-            // does not require a 16-byte-aligned address. The scan bounds or
-            // initialized short-input buffer guarantee all sixteen bytes exist.
+            // does not require a 16-byte-aligned address. The scan bounds
+            // guarantee all sixteen bytes exist.
             let mask = classify(v128_load(ptr.add(end).cast()));
             if mask != 0 {
                 // 15 - leading_zeros locates the highest set bit in this u16,
@@ -206,8 +227,8 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             }
         }
         // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // does not require a 16-byte-aligned address. The scan bounds
+        // guarantee all sixteen bytes exist.
         let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
@@ -216,6 +237,30 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         } else {
             len
         }
+    }
+}
+
+/// Returns one selected bit per input byte, with higher bits clear.
+///
+/// # Safety
+/// `haystack` must contain 4 to 7 bytes. `classify` must classify each byte
+/// independently and return its flag in the corresponding bit of the mask.
+#[inline(always)]
+unsafe fn mask8_overlap(haystack: &[u8], classify: impl Fn(v128) -> u16) -> u8 {
+    // SAFETY: this module requires simd128. Both loads read four initialized
+    // bytes within haystack and permit unaligned addresses. The first load
+    // zeroes the other lanes; the second replaces only 32-bit lane 1.
+    unsafe {
+        let ptr = haystack.as_ptr();
+        let last = haystack.len() - 4;
+        let prefix = v128_load32_zero(ptr.cast());
+        let bytes = v128_load32_lane::<1>(prefix, ptr.add(last).cast());
+        // For len = 7, lanes 0..7 contain input positions
+        // [0, 1, 2, 3 | 3, 4, 5, 6]. Ignore flags from zero-filled lanes 8..15.
+        let mask = classify(bytes) as u8;
+        // Move suffix flags 4..7 to their input positions last..len.
+        // OR merges duplicate flags; all bits above the input remain clear.
+        (mask & 0b0000_1111) | ((mask >> 4) << last)
     }
 }
 
@@ -246,7 +291,7 @@ unsafe fn mask16_overlap(haystack: &[u8], classify: impl Fn(v128) -> u16) -> u16
 
 #[cfg(test)]
 mod tests {
-    use super::{i8x16_bitmask, mask16_overlap, rscan, scan};
+    use super::{i8x16_bitmask, mask16_overlap, mask8_overlap, rscan, scan, u8x16_eq, u8x16_splat};
 
     #[test]
     fn scan_returns_the_first_selected_byte_in_overlapping_input() {
@@ -266,6 +311,37 @@ mod tests {
         // SAFETY: this module requires simd128 and the input has fifteen bytes.
         let actual = unsafe { rscan(&flags, |bytes| i8x16_bitmask(bytes)) };
         assert_eq!(actual, 12);
+    }
+
+    #[test]
+    fn mask8_overlap_preserves_each_selected_bytes_position() {
+        for len in 4..8 {
+            for position in 0..len {
+                let mut flags = [0u8; 7];
+                flags[position] = 0b11111111;
+                // SAFETY: each slice has 4..7 bytes; bitmask extracts one
+                // flag per byte independently, preserving lane order.
+                let mask = unsafe { mask8_overlap(&flags[..len], |bytes| i8x16_bitmask(bytes)) };
+                assert_eq!(mask, 1 << position, "len={len}, byte={position}");
+            }
+        }
+    }
+
+    #[test]
+    fn mask8_overlap_excludes_matching_zero_filled_lanes() {
+        // The input has no zero bytes. Every unused vector lane is zero,
+        // but those matching flags must be absent from the returned mask.
+        let haystack = [1u8; 7];
+        for len in 4..8 {
+            // SAFETY: the slice has 4..7 bytes and classify returns one
+            // selected bit for each zero byte, independently of other lanes.
+            let mask = unsafe {
+                mask8_overlap(&haystack[..len], |bytes| {
+                    i8x16_bitmask(u8x16_eq(bytes, u8x16_splat(0)))
+                })
+            };
+            assert_eq!(mask, 0);
+        }
     }
 
     #[test]
