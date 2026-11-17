@@ -1,11 +1,11 @@
 // Automatic and explicitly configured searches share kernel selection.
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod x86_64;
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod wasm32;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86_64;
 
 use crate::backend::SimdBackend;
 
@@ -42,10 +42,8 @@ pub(super) fn search_fallback<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> Option<usize> {
-    // Classify one byte and return on a hit
-    // before advancing. An empty or exhausted slice returns None.
-    // Keep this loop scalar so short-input layout experiments compare the
-    // same one-byte traversal, without an unrolled or vectorized alternative.
+    // Check membership one byte at a time and stop at the first selected byte.
+    // An empty or exhausted slice returns None.
     haystack
         .iter()
         .position(|&byte| find::<REVERT>(low, high, byte))

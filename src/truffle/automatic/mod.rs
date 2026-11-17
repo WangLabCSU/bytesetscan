@@ -29,6 +29,10 @@ impl Truffle {
     ///
     /// An empty needle matches no bytes. Duplicate bytes and their order do not
     /// affect matching.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
     pub fn new(needle: &[u8]) -> Self {
         Self {
             table: TruffleTable::new(needle),
@@ -39,6 +43,10 @@ impl Truffle {
     ///
     /// When `ignore_case` is `true`, ASCII letters match either case; other
     /// bytes match exactly. When it is `false`, this behaves like [`Self::new`].
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
     pub fn with_case(ignore_case: bool, needle: &[u8]) -> Self {
         Self {
             table: TruffleTable::with_case(ignore_case, needle),
@@ -48,6 +56,10 @@ impl Truffle {
     /// Returns the index of the first byte in `haystack` that belongs to the needle.
     ///
     /// Returns `None` if no match is found.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -66,6 +78,10 @@ impl Truffle {
     /// Returns the index of the first byte in `haystack` that is not in the needle.
     ///
     /// Returns `None` if all bytes belong to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -135,6 +151,10 @@ impl Truffle {
     ///
     /// Searches from the end of the slice. Returns `None` if no match is found.
     ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
+    ///
     /// # Examples
     ///
     /// ```
@@ -153,6 +173,10 @@ impl Truffle {
     ///
     /// Searches from the end of the slice. Returns `None` if all bytes belong
     /// to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -219,6 +243,12 @@ impl Truffle {
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
     ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
+    ///
     /// # Examples
     ///
     /// ```
@@ -240,6 +270,12 @@ impl Truffle {
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
     ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
+    ///
     /// # Examples
     ///
     /// ```
@@ -259,6 +295,12 @@ impl Truffle {
     /// This is the matching byte set, not the original constructor input.
     /// Each byte is yielded once. With ASCII case-insensitive matching, both
     /// cases of each letter are included.
+    ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Full iteration checks
+    /// the 256 possible byte values, so its time is O(1), independent of the
+    /// original needle length.
     ///
     /// # Examples
     ///

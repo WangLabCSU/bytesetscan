@@ -33,6 +33,10 @@ impl Shufti {
     /// Returns `None` if the set cannot be represented. Any set of ASCII bytes
     /// fits; see [choosing a matcher](crate#choosing-a-matcher) for the limits
     /// on non-ASCII sets.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
     pub fn new(needle: &[u8]) -> Option<Self> {
         Self::with_case(false, needle)
     }
@@ -43,6 +47,10 @@ impl Shufti {
     /// bytes match exactly. When it is `false`, this behaves like [`Self::new`].
     ///
     /// Returns `None` if the resulting byte set exceeds the limits in [`Self::new`].
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
     pub fn with_case(ignore_case: bool, needle: &[u8]) -> Option<Self> {
         ShuftiTable::with_case(ignore_case, needle).map(Self::with_table)
     }
@@ -54,6 +62,10 @@ impl Shufti {
     /// Returns the index of the first byte in `haystack` that belongs to the needle.
     ///
     /// Returns `None` if no match is found.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -72,6 +84,10 @@ impl Shufti {
     /// Returns the index of the first byte in `haystack` that is not in the needle.
     ///
     /// Returns `None` if all bytes belong to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -141,6 +157,10 @@ impl Shufti {
     ///
     /// Searches from the end of the slice. Returns `None` if no match is found.
     ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
+    ///
     /// # Examples
     ///
     /// ```
@@ -159,6 +179,10 @@ impl Shufti {
     ///
     /// Searches from the end of the slice. Returns `None` if all bytes belong
     /// to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     ///
     /// # Examples
     ///
@@ -225,6 +249,12 @@ impl Shufti {
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
     ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
+    ///
     /// # Examples
     ///
     /// ```
@@ -246,6 +276,12 @@ impl Shufti {
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
     ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
+    ///
     /// # Examples
     ///
     /// ```
@@ -265,6 +301,12 @@ impl Shufti {
     /// This is the matching byte set, not the original constructor input.
     /// Each byte is yielded once. With ASCII case-insensitive matching, both
     /// cases of each letter are included.
+    ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Full iteration checks
+    /// the 256 possible byte values, so its time is O(1), independent of the
+    /// original needle length.
     ///
     /// # Examples
     ///

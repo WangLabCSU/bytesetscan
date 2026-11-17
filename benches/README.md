@@ -39,19 +39,19 @@ cargo bench --bench scan -- --size 1024 --needle-size 16 --rounds 5 --warmup-ms 
 cargo bench --bench scan -- --backend neon
 ```
 
-| Option          | Default          | Meaning                                                                                       |
-| --------------- | ---------------- | --------------------------------------------------------------------------------------------- |
-| `--size`        | `1,7,15,64,1024` | Haystack lengths in bytes.                                                                    |
-| `--needle-size` | `4,16,64`        | Distinct needle bytes, from 1 through 255.                                                    |
-| `--hit`         | `middle,miss`    | `miss`, `first`, `middle`, or `last` match placement.                                         |
-| `--backend`     | `auto`           | Automatic selection, `all`, or a backend from the table below.                                |
-| `--rounds`      | `10`             | Recorded batches per method and search case.                                                  |
-| `--warmup-ms`   | `30`             | Minimum warmup time per method and case.                                                      |
-| `--sample-ms`   | `10`             | Minimum duration of each recorded batch.                                                      |
-| `--iterations`  | Automatic        | Override the batch duration with a fixed search count; conflicts with explicit `--sample-ms`. |
-| `--samples`     | Off              | CSV path for every recorded batch's count and elapsed time.                                   |
-| `--offset`      | `1`              | Haystack address modulo 64, from 0 through 63.                                                |
-| `--test`        | Off              | Check results without timing.                                                                 |
+| Option          | Default                    | Meaning                                                                                       |
+| --------------- | -------------------------- | --------------------------------------------------------------------------------------------- |
+| `--size`        | `7,15,64,128,256,512,1024` | Haystack lengths in bytes.                                                                    |
+| `--needle-size` | `4,16,64`                  | Distinct needle bytes, from 1 through 255.                                                    |
+| `--hit`         | `middle,miss`              | `miss`, `first`, `middle`, or `last` match placement.                                         |
+| `--backend`     | `auto`                     | Automatic selection, `all`, or a backend from the table below.                                |
+| `--rounds`      | `10`                       | Recorded batches per method and search case.                                                  |
+| `--warmup-ms`   | `30`                       | Minimum warmup time per method and case.                                                      |
+| `--sample-ms`   | `10`                       | Minimum duration of each recorded batch.                                                      |
+| `--iterations`  | Automatic                  | Override the batch duration with a fixed search count; conflicts with explicit `--sample-ms`. |
+| `--samples`     | Off                        | CSV path for every recorded batch's count and elapsed time.                                   |
+| `--offset`      | `1`                        | Haystack address modulo 64, from 0 through 63.                                                |
+| `--test`        | Off                        | Check results without timing.                                                                 |
 
 Sizes, needle sizes, and hit positions accept comma-separated values or
 repeated options. Each needle contains bytes `0..size`; each haystack contains
@@ -126,8 +126,8 @@ client and prepares them under `target/scan`. Boost headers and Ragel are reused
 from the system when available, otherwise prepared in that cache. Nothing is
 installed system-wide.
 
-The pinned Hyperscan revision is
-[`bc3b191ab56055e8560c7cdc161c289c4d76e3d2`](https://github.com/intel/hyperscan/tree/bc3b191ab56055e8560c7cdc161c289c4d76e3d2).
+The pinned [Hyperscan](https://github.com/intel/hyperscan) revision is
+`bc3b191ab56055e8560c7cdc161c289c4d76e3d2`.
 Its original CMake `hs_runtime` target is built in Release mode with
 `FAT_RUNTIME`, `BUILD_AVX512`, and `BUILD_AVX512VBMI` enabled. Upstream chooses
 the compiler flags for each backend. The wrapper compiles the two upstream

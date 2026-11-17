@@ -1,11 +1,11 @@
 // Automatic and explicitly configured searches share kernel selection.
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod x86_64;
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod wasm32;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86_64;
 
 use crate::backend::SimdBackend;
 
@@ -84,7 +84,7 @@ fn find<const REVERT: bool>(lower: &[u8; 16], upper: &[u8; 16], byte: u8) -> boo
     // The top bit chooses the table half. Bits 0..3 index its byte and
     // bits 4..6 select the membership bit, covering all 256 possible values.
     let half = if byte < 128 { lower } else { upper };
-    //SAFETY: we only extract low nibble as the index, it must < 16
+    // SAFETY: masking to the low four bits produces an index in 0..16.
     let flags = unsafe { half.get_unchecked((byte & 0b0000_1111) as usize) };
     (flags & (1 << ((byte >> 4) & 0b0000_0111)) != 0) != REVERT
 }

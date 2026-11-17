@@ -269,9 +269,6 @@ unsafe fn mask32<const REVERT: bool>(lower: __m128i, upper: __m128i, bytes: __m2
             _mm256_broadcastsi128_si256(upper),
             _mm256_xor_si256(bytes, top),
         );
-        // The 64-bit shift can carry bits across byte lanes. pshufb ignores
-        // index bits 4..6, and clearing bit 7 prevents accidental zeroing;
-        // the low nibble still contains this byte's original high nibble.
         // srli_epi64 shifts 64-bit lanes, not individual bytes. Its low
         // four output bits still equal this byte's high nibble; higher bits
         // may come from the next byte. andnot(top, shifted) clears bit 7

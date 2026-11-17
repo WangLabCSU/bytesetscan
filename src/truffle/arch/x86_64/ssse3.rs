@@ -391,7 +391,7 @@ mod tests {
                     &haystack[..len],
                 )
             };
-            // Inversion leaves the first set bit at len, not at a real match.
+            // No input byte matches, so the selected mask must be empty.
             assert_eq!(position, None);
         }
     }
@@ -412,7 +412,7 @@ mod tests {
                 &haystack,
             )
         };
-        // Bit 15 becomes set on inversion but is outside the input.
+        // The overlapping loads must map the final match to index 14, not 15.
         assert_eq!(position, Some(14));
     }
 

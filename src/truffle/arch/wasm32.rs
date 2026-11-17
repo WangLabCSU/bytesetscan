@@ -121,9 +121,8 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize>
                 None
             };
         }
-        // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // len >= 16, so the first sixteen bytes are in bounds. v128_load
+        // does not require a 16-byte-aligned address.
         let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
@@ -136,9 +135,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize>
         let mut start = 16 - (ptr as usize & 0b00001111);
         let last = len - 16;
         while start < last {
-            // Read sixteen consecutive input bytes into a vector; this load
-            // does not require a 16-byte-aligned address. The scan bounds or
-            // initialized short-input buffer guarantee all sixteen bytes exist.
+            // start < len - 16 keeps this entire vector inside the slice.
             let mask = classify(v128_load(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
@@ -147,9 +144,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize>
             }
             start += 16;
         }
-        // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // last = len - 16 makes this unaligned load end at the slice boundary.
         let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
@@ -281,9 +276,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize
             };
         }
         let last = len - 16;
-        // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // last = len - 16 makes this unaligned load end at the slice boundary.
         let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
@@ -297,9 +290,8 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize
         let mut end = len - (ptr.add(len) as usize & 0b00001111);
         while end > 16 {
             end -= 16;
-            // Read sixteen consecutive input bytes into a vector; this load
-            // does not require a 16-byte-aligned address. The scan bounds or
-            // initialized short-input buffer guarantee all sixteen bytes exist.
+            // The previous end was at most len and greater than 16. After
+            // subtracting 16, this entire vector remains inside the slice.
             let mask = classify(v128_load(ptr.add(end).cast()));
             if mask != 0 {
                 // 15 - leading_zeros locates the highest set bit in this u16,
@@ -308,9 +300,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize
                 return Some(end + 15 - mask.leading_zeros() as usize);
             }
         }
-        // Read sixteen consecutive input bytes into a vector; this load
-        // does not require a 16-byte-aligned address. The scan bounds or
-        // initialized short-input buffer guarantee all sixteen bytes exist.
+        // len >= 16 keeps this final unaligned prefix load inside the slice.
         let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,

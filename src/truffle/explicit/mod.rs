@@ -31,6 +31,10 @@ impl TruffleEngine {
     ///
     /// Returns `None` if the backend is unavailable.
     ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
+    ///
     /// # Examples
     ///
     /// ```
@@ -49,6 +53,10 @@ impl TruffleEngine {
     /// bytes match exactly. When it is `false`, this behaves like [`Self::new`].
     ///
     /// Returns `None` if the backend is unavailable.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(needle.len()) time.
     ///
     /// # Examples
     ///
@@ -74,6 +82,10 @@ impl TruffleEngine {
     /// Returns the index of the first byte in `haystack` that belongs to the needle.
     ///
     /// Returns `None` if no match is found.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     #[inline]
     pub fn find(&self, haystack: &[u8]) -> Option<usize> {
         self.vtable.search::<false>(&self.table, haystack)
@@ -82,6 +94,10 @@ impl TruffleEngine {
     /// Returns the index of the first byte in `haystack` that is not in the needle.
     ///
     /// Returns `None` if all bytes belong to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     #[inline]
     pub fn mismatch(&self, haystack: &[u8]) -> Option<usize> {
         self.vtable.search::<true>(&self.table, haystack)
@@ -90,6 +106,10 @@ impl TruffleEngine {
     /// Returns the index of the last byte in `haystack` that belongs to the needle.
     ///
     /// Searches from the end of the slice. Returns `None` if no match is found.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     #[inline]
     pub fn rfind(&self, haystack: &[u8]) -> Option<usize> {
         self.vtable.rsearch::<false>(&self.table, haystack)
@@ -99,6 +119,10 @@ impl TruffleEngine {
     ///
     /// Searches from the end of the slice. Returns `None` if all bytes belong
     /// to the needle.
+    ///
+    /// # Complexity
+    ///
+    /// Worst-case O(haystack.len()) time.
     #[inline]
     pub fn rmismatch(&self, haystack: &[u8]) -> Option<usize> {
         self.vtable.rsearch::<true>(&self.table, haystack)
@@ -108,6 +132,12 @@ impl TruffleEngine {
     ///
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
+    ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
     ///
     /// # Examples
     ///
@@ -129,6 +159,12 @@ impl TruffleEngine {
     ///
     /// Indices are yielded in ascending order. Use [`.rev()`](Iterator::rev)
     /// to iterate in reverse.
+    ///
+    /// # Complexity
+    ///
+    /// Creating the iterator takes O(1) time. Fully consuming it
+    /// takes O(haystack.len()) time. A single `next()` or `next_back()` call
+    /// may scan all remaining input.
     ///
     /// # Examples
     ///

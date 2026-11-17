@@ -375,7 +375,7 @@ mod tests {
             return;
         }
         let table = ShuftiTable::new(b"a").unwrap();
-        // Every real byte matches; inversion must not introduce a match at len.
+        // Every byte matches; overlap handling must keep the last match at len - 1.
         let haystack = [b'a'; 15];
         for len in 4..16 {
             // SAFETY: SSSE3 is available, both table loads are in bounds, and
