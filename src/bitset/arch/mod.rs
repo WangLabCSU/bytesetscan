@@ -12,6 +12,8 @@ use crate::backend::SimdBackend;
 // Each function returns haystack.len() when no match is found. Before calling
 // a SIMD kernel, establish backend availability; entry points handle all lengths.
 // Selecting or storing a pointer does not execute its target instructions.
+// Function pointers do not carry target_feature requirements, so calling one
+// remains unsafe even when its target is declared as a safe function.
 pub(super) type SearchFn = unsafe fn(&[u64; 4], &[u8]) -> usize;
 
 // Used by automatic dispatch and BitsetEngine construction. Keeping selection

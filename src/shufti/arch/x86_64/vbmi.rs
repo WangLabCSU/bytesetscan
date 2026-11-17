@@ -10,7 +10,7 @@ use super::avx512::{rsearch512, search512};
 // Performance still needs hardware validation.
 // Requires avx512f,avx512bw,avx512vbmi, valid table arrays, any slice length.
 #[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
-pub(in super::super) unsafe fn shufti_vbmi<const REVERT: bool>(
+pub(in super::super) fn shufti_vbmi<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
@@ -32,7 +32,7 @@ pub(in super::super) unsafe fn shufti_vbmi<const REVERT: bool>(
 
 // Reverse entry point. Requires avx512f,avx512bw,avx512vbmi any slice length.
 #[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
-pub(in super::super) unsafe fn rshufti_vbmi<const REVERT: bool>(
+pub(in super::super) fn rshufti_vbmi<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],

@@ -6,7 +6,7 @@ use core::arch::x86_64::*;
 use super::super::{rscan, rsearch_fallback, scan, search_fallback};
 
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn bitset_ssse3<const REVERT: bool>(
+pub(in super::super) fn bitset_ssse3<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
 ) -> usize {
@@ -48,7 +48,7 @@ pub(in super::super) unsafe fn bitset_ssse3<const REVERT: bool>(
 }
 
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn rbitset_ssse3<const REVERT: bool>(
+pub(in super::super) fn rbitset_ssse3<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
 ) -> usize {
@@ -91,7 +91,7 @@ pub(in super::super) unsafe fn rbitset_ssse3<const REVERT: bool>(
 
 #[inline]
 #[target_feature(enable = "ssse3")]
-pub(super) unsafe fn mask16<const REVERT: bool>(
+pub(super) fn mask16<const REVERT: bool>(
     lower: __m128i,
     upper: __m128i,
     bit_masks: __m128i,

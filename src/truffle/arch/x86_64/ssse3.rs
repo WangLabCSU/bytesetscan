@@ -5,7 +5,7 @@ use core::arch::x86_64::*;
 
 // Requires ssse3, valid table arrays, any slice length.
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn truffle_ssse3<const REVERT: bool>(
+pub(in super::super) fn truffle_ssse3<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
@@ -117,7 +117,7 @@ pub(super) unsafe fn search128<const REVERT: bool>(
 
 // Reverse entry point. Requires ssse3 any slice length.
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn rtruffle_ssse3<const REVERT: bool>(
+pub(in super::super) fn rtruffle_ssse3<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],

@@ -5,7 +5,7 @@ use core::arch::x86_64::*;
 
 // Requires avx512f,avx512bw, valid table arrays, any slice length.
 #[target_feature(enable = "avx512f,avx512bw")]
-pub(in super::super) unsafe fn truffle_avx512<const REVERT: bool>(
+pub(in super::super) fn truffle_avx512<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
@@ -124,7 +124,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
 
 // Reverse entry point. Requires avx512f,avx512bw any slice length.
 #[target_feature(enable = "avx512f,avx512bw")]
-pub(in super::super) unsafe fn rtruffle_avx512<const REVERT: bool>(
+pub(in super::super) fn rtruffle_avx512<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],

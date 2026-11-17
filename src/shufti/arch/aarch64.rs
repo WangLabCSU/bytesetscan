@@ -4,7 +4,7 @@
 use core::arch::aarch64::*;
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn search<const REVERT: bool>(
+pub(super) fn search<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
@@ -117,7 +117,7 @@ fn first_index(mask: u64) -> usize {
 }
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn rsearch<const REVERT: bool>(
+pub(super) fn rsearch<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],

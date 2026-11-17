@@ -5,7 +5,7 @@ use core::arch::x86_64::*;
 
 // Requires ssse3, valid table arrays, any slice length.
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn shufti_ssse3<const REVERT: bool>(
+pub(in super::super) fn shufti_ssse3<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
@@ -98,7 +98,7 @@ pub(super) unsafe fn search128<const REVERT: bool>(
 
 // Reverse entry point. Requires ssse3 any slice length.
 #[target_feature(enable = "ssse3")]
-pub(in super::super) unsafe fn rshufti_ssse3<const REVERT: bool>(
+pub(in super::super) fn rshufti_ssse3<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],

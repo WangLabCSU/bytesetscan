@@ -3,7 +3,7 @@ use core::arch::aarch64::*;
 use super::{rscan, rsearch_fallback, scan, search_fallback};
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn search<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
+pub(super) fn search<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
     if haystack.len() < 16 {
         return search_fallback::<REVERT>(bits, haystack);
     }
@@ -25,7 +25,7 @@ pub(super) unsafe fn search<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]
 }
 
 #[target_feature(enable = "neon")]
-pub(super) unsafe fn rsearch<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
+pub(super) fn rsearch<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
     if haystack.len() < 16 {
         return rsearch_fallback::<REVERT>(bits, haystack);
     }
@@ -48,7 +48,7 @@ pub(super) unsafe fn rsearch<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8
 
 #[inline]
 #[target_feature(enable = "neon")]
-unsafe fn mask16<const REVERT: bool>(table: uint8x16x2_t, bytes: uint8x16_t) -> u16 {
+fn mask16<const REVERT: bool>(table: uint8x16x2_t, bytes: uint8x16_t) -> u16 {
     // Unlike the x86 lane shift, this shifts each byte independently. b >> 3
     // selects one of the 32 bitset bytes through TBL's two-register lookup.
     let entry = vqtbl2q_u8(table, vshrq_n_u8::<3>(bytes));

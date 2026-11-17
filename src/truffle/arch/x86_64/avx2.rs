@@ -6,7 +6,7 @@ use core::arch::x86_64::*;
 /// # Safety
 /// The CPU must support AVX2.
 #[target_feature(enable = "avx2")]
-pub(in super::super) unsafe fn truffle_avx2<const REVERT: bool>(
+pub(in super::super) fn truffle_avx2<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
@@ -114,7 +114,7 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
 
 // Reverse entry point. Requires avx2 any slice length.
 #[target_feature(enable = "avx2")]
-pub(in super::super) unsafe fn rtruffle_avx2<const REVERT: bool>(
+pub(in super::super) fn rtruffle_avx2<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],

@@ -5,7 +5,7 @@ use core::arch::x86_64::*;
 
 // Requires avx512f,avx512bw, valid table arrays, any slice length.
 #[target_feature(enable = "avx512f,avx512bw")]
-pub(in super::super) unsafe fn shufti_avx512<const REVERT: bool>(
+pub(in super::super) fn shufti_avx512<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
@@ -130,7 +130,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
 
 // Reverse entry point. Requires avx512f,avx512bw any slice length.
 #[target_feature(enable = "avx512f,avx512bw")]
-pub(in super::super) unsafe fn rshufti_avx512<const REVERT: bool>(
+pub(in super::super) fn rshufti_avx512<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],

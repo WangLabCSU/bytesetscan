@@ -88,10 +88,10 @@ pub(super) fn search<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
+fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping suffix.
-    // SAFETY: SIMD support is established by the entry point.
+    // SAFETY: this module is compiled only with simd128 enabled.
     // Short inputs use initialized local storage. All full input loads remain inside haystack.
     unsafe {
         let base = haystack.as_ptr();
@@ -237,10 +237,10 @@ pub(super) fn rsearch<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
+fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping prefix.
-    // SAFETY: SIMD support is established by the entry point.
+    // SAFETY: this module is compiled only with simd128 enabled.
     // Short inputs use initialized local storage. All full input loads remain inside haystack.
     unsafe {
         let base = haystack.as_ptr();

@@ -7,7 +7,7 @@ use super::super::{rscan, scan};
 use super::avx2::{bitset_avx2, rbitset_avx2};
 
 #[target_feature(enable = "avx2,avx512f,avx512bw")]
-pub(in super::super) unsafe fn bitset_avx512<const REVERT: bool>(
+pub(in super::super) fn bitset_avx512<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
 ) -> usize {
@@ -49,7 +49,7 @@ pub(in super::super) unsafe fn bitset_avx512<const REVERT: bool>(
 }
 
 #[target_feature(enable = "avx2,avx512f,avx512bw")]
-pub(in super::super) unsafe fn rbitset_avx512<const REVERT: bool>(
+pub(in super::super) fn rbitset_avx512<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
 ) -> usize {
@@ -92,7 +92,7 @@ pub(in super::super) unsafe fn rbitset_avx512<const REVERT: bool>(
 
 #[inline]
 #[target_feature(enable = "avx512f,avx512bw")]
-unsafe fn mask64<const REVERT: bool>(
+fn mask64<const REVERT: bool>(
     lower: __m512i,
     upper: __m512i,
     bit_masks: __m512i,

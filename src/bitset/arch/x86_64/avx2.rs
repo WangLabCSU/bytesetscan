@@ -7,10 +7,7 @@ use super::super::{rscan, scan};
 use super::ssse3::{bitset_ssse3, rbitset_ssse3};
 
 #[target_feature(enable = "avx2")]
-pub(in super::super) unsafe fn bitset_avx2<const REVERT: bool>(
-    bits: &[u64; 4],
-    haystack: &[u8],
-) -> usize {
+pub(in super::super) fn bitset_avx2<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
     // SAFETY: the caller checked this backend. Narrower kernels require only
     // features implied by this entry point. scan/rscan supply in-bounds blocks.
     unsafe {
@@ -49,7 +46,7 @@ pub(in super::super) unsafe fn bitset_avx2<const REVERT: bool>(
 }
 
 #[target_feature(enable = "avx2")]
-pub(in super::super) unsafe fn rbitset_avx2<const REVERT: bool>(
+pub(in super::super) fn rbitset_avx2<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
 ) -> usize {
@@ -92,7 +89,7 @@ pub(in super::super) unsafe fn rbitset_avx2<const REVERT: bool>(
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn mask32<const REVERT: bool>(
+fn mask32<const REVERT: bool>(
     lower: __m256i,
     upper: __m256i,
     bit_masks: __m256i,
