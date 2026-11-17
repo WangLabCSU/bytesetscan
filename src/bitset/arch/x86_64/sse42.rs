@@ -6,7 +6,7 @@ use core::arch::x86_64::*;
 use super::super::{rscan, rsearch_fallback, scan, search_fallback};
 use super::ssse3::mask16;
 
-#[target_feature(enable = "ssse3,sse4.2,popcnt")]
+#[target_feature(enable = "sse4.2,popcnt")]
 pub(in super::super) fn bitset_sse42<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
@@ -48,7 +48,7 @@ pub(in super::super) fn bitset_sse42<const REVERT: bool>(
     }
 }
 
-#[target_feature(enable = "ssse3,sse4.2,popcnt")]
+#[target_feature(enable = "sse4.2,popcnt")]
 pub(in super::super) fn rbitset_sse42<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],

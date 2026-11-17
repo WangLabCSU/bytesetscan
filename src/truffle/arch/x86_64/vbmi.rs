@@ -8,8 +8,8 @@ use super::avx512::{rsearch512, search512};
 // AVX-512 and VBMI use the same single-byte shuffle classifier. Separate entry
 // points allow selecting VBMI without requiring it for the base AVX-512 path.
 // Performance still needs hardware validation.
-// Requires avx512f,avx512bw,avx512vbmi, valid table arrays, any slice length.
-#[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
+// Requires avx512vbmi, valid table arrays, any slice length.
+#[target_feature(enable = "avx512vbmi")]
 pub(in super::super) fn truffle_vbmi<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
@@ -30,8 +30,8 @@ pub(in super::super) fn truffle_vbmi<const REVERT: bool>(
     }
 }
 
-// Reverse entry point. Requires avx512f,avx512bw,avx512vbmi any slice length.
-#[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
+// Reverse entry point. Requires avx512vbmi, any slice length.
+#[target_feature(enable = "avx512vbmi")]
 pub(in super::super) fn rtruffle_vbmi<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],

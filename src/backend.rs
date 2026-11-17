@@ -16,16 +16,16 @@ pub enum SimdBackend {
     /// The SSSE3 backend for x86 and x86-64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Ssse3,
-    /// The SSE4.2 backend, which also requires SSSE3 and POPCNT.
+    /// The SSE4.2 backend, which also requires POPCNT.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Sse4_2,
     /// The AVX2 backend for x86 and x86-64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Avx2,
-    /// The AVX-512F/BW backend, which also requires AVX2.
+    /// The AVX-512BW backend for x86 and x86-64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Avx512,
-    /// The AVX-512 VBMI backend, which also requires AVX2 and AVX-512F/BW.
+    /// The AVX-512 VBMI backend for x86 and x86-64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     Avx512Vbmi,
     /// The NEON backend for AArch64.
@@ -140,29 +140,20 @@ impl SimdBackend {
             // the current processor lacks support.
             match self {
                 Self::Fallback => true,
+                // Check the most specific feature in each dependency chain:
+                // SSE4.2 -> SSE4.1 -> SSSE3 and AVX-512VBMI -> BW -> F -> AVX2.
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 Self::Ssse3 => cfg!(target_feature = "ssse3"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                Self::Sse4_2 => cfg!(all(
-                    target_feature = "ssse3",
-                    target_feature = "sse4.2",
-                    target_feature = "popcnt"
-                )),
+                // POPCNT remains independent and must be checked separately.
+                // https://doc.rust-lang.org/reference/attributes/codegen.html#attributes.codegen.target_feature.x86
+                Self::Sse4_2 => cfg!(all(target_feature = "sse4.2", target_feature = "popcnt")),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 Self::Avx2 => cfg!(target_feature = "avx2"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                Self::Avx512 => cfg!(all(
-                    target_feature = "avx2",
-                    target_feature = "avx512f",
-                    target_feature = "avx512bw"
-                )),
+                Self::Avx512 => cfg!(target_feature = "avx512bw"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                Self::Avx512Vbmi => cfg!(all(
-                    target_feature = "avx2",
-                    target_feature = "avx512f",
-                    target_feature = "avx512bw",
-                    target_feature = "avx512vbmi"
-                )),
+                Self::Avx512Vbmi => cfg!(target_feature = "avx512vbmi"),
                 #[cfg(target_arch = "aarch64")]
                 Self::Neon => cfg!(target_feature = "neon"),
                 #[cfg(target_arch = "wasm32")]
@@ -172,32 +163,23 @@ impl SimdBackend {
 
         #[cfg(feature = "std")]
         {
-            // std validates CPU and OS support, compiler feature implications,
-            // and platform restrictions.
+            // std checks CPU and OS support and caches detected capabilities.
             // https://doc.rust-lang.org/src/std_detect/detect/os/x86.rs.html
-            // std caches processor capabilities used by these checks.
             match self {
                 Self::Fallback => true,
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 Self::Ssse3 => std::is_x86_feature_detected!("ssse3"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 Self::Sse4_2 => {
-                    std::is_x86_feature_detected!("ssse3")
-                        && std::is_x86_feature_detected!("sse4.2")
+                    std::is_x86_feature_detected!("sse4.2")
                         && std::is_x86_feature_detected!("popcnt")
                 }
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 Self::Avx2 => std::is_x86_feature_detected!("avx2"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                Self::Avx512 => {
-                    std::is_x86_feature_detected!("avx2")
-                        && std::is_x86_feature_detected!("avx512f")
-                        && std::is_x86_feature_detected!("avx512bw")
-                }
+                Self::Avx512 => std::is_x86_feature_detected!("avx512bw"),
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-                Self::Avx512Vbmi => {
-                    Self::Avx512.is_available() && std::is_x86_feature_detected!("avx512vbmi")
-                }
+                Self::Avx512Vbmi => std::is_x86_feature_detected!("avx512vbmi"),
                 #[cfg(target_arch = "aarch64")]
                 Self::Neon => std::arch::is_aarch64_feature_detected!("neon"),
                 #[cfg(target_arch = "wasm32")]

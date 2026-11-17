@@ -5,8 +5,8 @@ use core::arch::x86_64::*;
 
 use super::ssse3::{rsearch128, search128};
 
-// Requires ssse3,sse4.2,popcnt, valid table arrays, any slice length.
-#[target_feature(enable = "ssse3,sse4.2,popcnt")]
+// Requires sse4.2,popcnt, valid table arrays, any slice length.
+#[target_feature(enable = "sse4.2,popcnt")]
 pub(in super::super) fn truffle_sse42<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
@@ -27,8 +27,8 @@ pub(in super::super) fn truffle_sse42<const REVERT: bool>(
     }
 }
 
-// Reverse entry point. Requires ssse3,sse4.2,popcnt any slice length.
-#[target_feature(enable = "ssse3,sse4.2,popcnt")]
+// Reverse entry point. Requires sse4.2,popcnt, any slice length.
+#[target_feature(enable = "sse4.2,popcnt")]
 pub(in super::super) fn rtruffle_sse42<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],

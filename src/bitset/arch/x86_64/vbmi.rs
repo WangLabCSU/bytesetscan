@@ -6,7 +6,7 @@ use core::arch::x86_64::*;
 use super::super::{rscan, scan};
 use super::avx2::{bitset_avx2, rbitset_avx2};
 
-#[target_feature(enable = "avx2,avx512f,avx512bw,avx512vbmi")]
+#[target_feature(enable = "avx512vbmi")]
 pub(in super::super) fn bitset_vbmi<const REVERT: bool>(bits: &[u64; 4], haystack: &[u8]) -> usize {
     // SAFETY: the caller checked this backend. Narrower kernels require only
     // features implied by this entry point. scan/rscan supply in-bounds blocks.
@@ -45,7 +45,7 @@ pub(in super::super) fn bitset_vbmi<const REVERT: bool>(bits: &[u64; 4], haystac
     }
 }
 
-#[target_feature(enable = "avx2,avx512f,avx512bw,avx512vbmi")]
+#[target_feature(enable = "avx512vbmi")]
 pub(in super::super) fn rbitset_vbmi<const REVERT: bool>(
     bits: &[u64; 4],
     haystack: &[u8],
@@ -88,7 +88,7 @@ pub(in super::super) fn rbitset_vbmi<const REVERT: bool>(
 }
 
 #[inline]
-#[target_feature(enable = "avx512f,avx512bw,avx512vbmi")]
+#[target_feature(enable = "avx512vbmi")]
 fn mask64_vbmi<const REVERT: bool>(table: __m512i, bit_masks: __m512i, bytes: __m512i) -> u64 {
     // VPERMB indexes across the whole 64-byte register, so indices 0..31
     // directly choose bitset[b >> 3] without a separate table-half selection.
