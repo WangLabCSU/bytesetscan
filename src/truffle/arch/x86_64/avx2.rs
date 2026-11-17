@@ -12,7 +12,7 @@ pub(in super::super) fn truffle_avx2<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // Two overlapping four-byte loads require at least four input bytes.
     if haystack.len() < 4 {
         return super::super::search_fallback::<REVERT>(lower, upper, haystack);
@@ -33,7 +33,11 @@ pub(in super::super) fn truffle_avx2<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
+unsafe fn search<const REVERT: bool>(
+    lower: __m128i,
+    upper: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX2 support and len >= 4.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
@@ -48,17 +52,12 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
         if len < 32 {
             // SAFETY: the preceding branch excludes len < 16. Both overlapping
             // 16-byte loads fit in this 16..31-byte input; AVX2 is enabled.
-            let mut mask = mask32_overlap(lower, upper, haystack);
-            if !REVERT {
-                // Inversion sets bits at and above len. They follow every real
-                // position, so no member makes trailing_zeros return len.
-                mask = !mask;
-            }
+            let mask = mask32_overlap::<REVERT>(lower, upper, haystack);
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
-                mask.trailing_zeros() as usize
+                Some(mask.trailing_zeros() as usize)
             } else {
-                len
+                None
             };
         }
 
@@ -72,7 +71,7 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
         }
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
-            return mask.trailing_zeros() as usize;
+            return Some(mask.trailing_zeros() as usize);
         }
         // After the first unaligned block, advance to the next boundary.
         // Each iteration classifies one vector.
@@ -94,7 +93,7 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
-                return start + mask.trailing_zeros() as usize;
+                return Some(start + mask.trailing_zeros() as usize);
             }
             start += 32;
         }
@@ -109,9 +108,9 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
-            last + mask.trailing_zeros() as usize
+            Some(last + mask.trailing_zeros() as usize)
         } else {
-            len
+            None
         }
     }
 }
@@ -122,7 +121,7 @@ pub(in super::super) fn rtruffle_avx2<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // Two overlapping four-byte loads require at least four input bytes.
     if haystack.len() < 4 {
         return super::super::rsearch_fallback::<REVERT>(lower, upper, haystack);
@@ -145,7 +144,11 @@ pub(in super::super) fn rtruffle_avx2<const REVERT: bool>(
 // Reverse counterpart to the forward scan: unaligned suffix, aligned interior,
 // then an overlapping prefix. The highest set bit identifies the last match.
 #[inline(always)]
-unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
+unsafe fn rsearch<const REVERT: bool>(
+    lower: __m128i,
+    upper: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX2 support and len >= 4.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
@@ -160,19 +163,13 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
         if len < 32 {
             // SAFETY: the preceding branch excludes len < 16. Both overlapping
             // 16-byte loads fit in this 16..31-byte input; AVX2 is enabled.
-            let mut mask = mask32_overlap(lower, upper, haystack);
-            if !REVERT {
-                // Inversion sets out-of-input bits too. Clear them before
-                // choosing the highest match; 16 <= len < 32 bounds the shift.
-                // Nonmember flags already have these bits clear.
-                mask = !mask & ((1u32 << len) - 1);
-            }
+            let mask = mask32_overlap::<REVERT>(lower, upper, haystack);
             return if mask != 0 {
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
-                (31 - mask.leading_zeros()) as usize
+                Some((31 - mask.leading_zeros()) as usize)
             } else {
-                len
+                None
             };
         }
 
@@ -189,7 +186,7 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
             // Add this block's start to return a position in the original input.
-            return last + (31 - mask.leading_zeros()) as usize;
+            return Some(last + (31 - mask.leading_zeros()) as usize);
         }
         // An already aligned end may cause the initial suffix block to be
         // checked again.
@@ -212,7 +209,7 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
                 // Add this block's start to return a position in the original input.
-                return end + (31 - mask.leading_zeros()) as usize;
+                return Some(end + (31 - mask.leading_zeros()) as usize);
             }
         }
         // Read the 32 bytes starting here without requiring alignment.
@@ -226,19 +223,24 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
-            (31 - mask.leading_zeros()) as usize
+            Some((31 - mask.leading_zeros()) as usize)
         } else {
-            len
+            None
         }
     }
 }
 
-/// Returns one nonmember bit per input byte, with higher bits clear.
+/// Returns one selected bit per input byte, with higher bits clear.
+/// `REVERT` selects nonmembers; otherwise, the mask selects members.
 ///
 /// # Safety
 /// The CPU must support AVX2, and `haystack` must contain 16 to 31 bytes.
 #[inline(always)]
-unsafe fn mask32_overlap(lower: __m128i, upper: __m128i, haystack: &[u8]) -> u32 {
+unsafe fn mask32_overlap<const REVERT: bool>(
+    lower: __m128i,
+    upper: __m128i,
+    haystack: &[u8],
+) -> u32 {
     // SAFETY: the caller establishes AVX2 support and 16 <= len < 32.
     // Both unaligned loads read exactly sixteen initialized bytes, covering
     // haystack[0..16] and haystack[len - 16..len] without crossing either bound.
@@ -250,11 +252,17 @@ unsafe fn mask32_overlap(lower: __m128i, upper: __m128i, haystack: &[u8]) -> u32
         // lane 1 supplies the upper 128 bits, initializing all 32 byte lanes.
         // For 31 bytes, their input positions are [0, ..., 15 | 15, ..., 30].
         let bytes = _mm256_inserti128_si256::<1>(_mm256_castsi128_si256(prefix), suffix);
-        let mask = mask32(lower, upper, bytes);
+        let mut mask = mask32(lower, upper, bytes);
+        if !REVERT {
+            // Select members before relocating the suffix. All thirty-two
+            // flags describe real input bytes, including duplicated positions.
+            mask = !mask;
+        }
         // Bits 0..15 already refer to the prefix's original positions. Move
         // the upper sixteen flags to the suffix's starting position, len - 16.
         // Duplicate bytes have identical flags, so OR merges their results;
-        // the highest possible result bit is len - 1, with no padding bits.
+        // the highest possible result bit is last + 15 == len - 1. Thus
+        // bits beyond the input remain clear for either predicate.
         (mask & 0b1111_1111_1111_1111) | ((mask >> 16) << last)
     }
 }
@@ -323,7 +331,7 @@ mod tests {
     use crate::{truffle::TruffleTable, SimdBackend};
 
     #[test]
-    fn search_returns_len_when_the_overlapping_input_has_no_member() {
+    fn search_returns_none_when_the_overlapping_input_has_no_member() {
         if !SimdBackend::Avx2.is_available() {
             return;
         }
@@ -339,8 +347,8 @@ mod tests {
                     &haystack[..len],
                 )
             };
-            // No 'a' exists. The first set bit after inversion is the end sentinel.
-            assert_eq!(position, len);
+            // No 'a' exists; unused mask bits must not produce a match.
+            assert_eq!(position, None);
         }
     }
 
@@ -362,7 +370,7 @@ mod tests {
                 )
             };
             // Inversion must not make an out-of-input bit the last match.
-            assert_eq!(position, len - 1);
+            assert_eq!(position, Some(len - 1));
         }
     }
 
@@ -381,13 +389,37 @@ mod tests {
                 // SAFETY: AVX2 is available, both table loads cover complete
                 // arrays, and the classifier receives between 16 and 31 bytes.
                 let mask = unsafe {
-                    mask32_overlap(
+                    mask32_overlap::<true>(
                         _mm_loadu_si128(table.lower().as_ptr().cast()),
                         _mm_loadu_si128(table.upper().as_ptr().cast()),
                         &haystack[..len],
                     )
                 };
                 assert_eq!(mask, 1u32 << position, "len={len}, position={position}");
+            }
+        }
+    }
+
+    #[test]
+    fn mask32_overlap_preserves_each_members_position() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        for len in 16..32 {
+            for position in 0..len {
+                let mut haystack = [b'!'; 31];
+                haystack[position] = b'a';
+                // SAFETY: AVX2 is available, both tables are complete, and
+                // each slice bounds both overlapping 16-byte loads.
+                let mask = unsafe {
+                    mask32_overlap::<false>(
+                        _mm_loadu_si128(table.lower().as_ptr().cast()),
+                        _mm_loadu_si128(table.upper().as_ptr().cast()),
+                        &haystack[..len],
+                    )
+                };
+                assert_eq!(mask, 1 << position, "len={len}, byte={position}");
             }
         }
     }
@@ -402,7 +434,7 @@ mod tests {
         // SAFETY: AVX2 is available, both table arrays contain sixteen bytes,
         // and this 31-byte input satisfies the overlapping load requirements.
         let mask = unsafe {
-            mask32_overlap(
+            mask32_overlap::<true>(
                 _mm_loadu_si128(table.lower().as_ptr().cast()),
                 _mm_loadu_si128(table.upper().as_ptr().cast()),
                 &haystack,

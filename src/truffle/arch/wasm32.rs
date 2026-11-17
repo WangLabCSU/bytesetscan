@@ -7,7 +7,7 @@ pub(super) fn search<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // Two overlapping four-byte loads require at least four input bytes.
     if haystack.len() < 4 {
         return super::search_fallback::<REVERT>(lower, upper, haystack);
@@ -92,7 +92,7 @@ pub(super) fn search<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
+unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize> {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping suffix.
     // SAFETY: simd128 is enabled and the caller establishes len >= 4.
@@ -106,9 +106,9 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             let mask = mask8_overlap(haystack, classify);
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
-                mask.trailing_zeros() as usize
+                Some(mask.trailing_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         if len < 16 {
@@ -116,9 +116,9 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             // classify returns one selected bit per byte, in input order.
             let mask = mask16_overlap(haystack, classify);
             return if mask != 0 {
-                mask.trailing_zeros() as usize
+                Some(mask.trailing_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         // Read sixteen consecutive input bytes into a vector; this load
@@ -127,7 +127,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
-            return mask.trailing_zeros() as usize;
+            return Some(mask.trailing_zeros() as usize);
         }
         // Masking the low four address bits gives the remainder modulo 16.
         // 16 - remainder is the distance to the next 16-byte boundary
@@ -143,7 +143,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
-                return start + mask.trailing_zeros() as usize;
+                return Some(start + mask.trailing_zeros() as usize);
             }
             start += 16;
         }
@@ -154,9 +154,9 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
-            last + mask.trailing_zeros() as usize
+            Some(last + mask.trailing_zeros() as usize)
         } else {
-            len
+            None
         }
     }
 }
@@ -165,7 +165,7 @@ pub(super) fn rsearch<const REVERT: bool>(
     lower: &[u8; 16],
     upper: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // Two overlapping four-byte loads require at least four input bytes.
     if haystack.len() < 4 {
         return super::rsearch_fallback::<REVERT>(lower, upper, haystack);
@@ -250,7 +250,7 @@ pub(super) fn rsearch<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
+unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> Option<usize> {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping prefix.
     // SAFETY: simd128 is enabled and the caller establishes len >= 4.
@@ -265,9 +265,9 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             return if mask != 0 {
                 // 7 - leading_zeros locates the highest set bit in this u8,
                 // which identifies the last selected byte lane.
-                7 - mask.leading_zeros() as usize
+                Some(7 - mask.leading_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         if len < 16 {
@@ -275,9 +275,9 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             // classify returns one selected bit per byte, in input order.
             let mask = mask16_overlap(haystack, classify);
             return if mask != 0 {
-                15 - mask.leading_zeros() as usize
+                Some(15 - mask.leading_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         let last = len - 16;
@@ -289,7 +289,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             // 15 - leading_zeros locates the highest set bit in this u16,
             // which identifies the last selected byte lane.
             // Add this block's start to return a position in the original input.
-            return last + 15 - mask.leading_zeros() as usize;
+            return Some(last + 15 - mask.leading_zeros() as usize);
         }
         // The end address's low four bits give its remainder modulo 16.
         // Subtract that remainder from len to round ptr + end down to a
@@ -305,7 +305,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
                 // 15 - leading_zeros locates the highest set bit in this u16,
                 // which identifies the last selected byte lane.
                 // Add this block's start to return a position in the original input.
-                return end + 15 - mask.leading_zeros() as usize;
+                return Some(end + 15 - mask.leading_zeros() as usize);
             }
         }
         // Read sixteen consecutive input bytes into a vector; this load
@@ -315,9 +315,9 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
             // which identifies the last selected byte lane.
-            15 - mask.leading_zeros() as usize
+            Some(15 - mask.leading_zeros() as usize)
         } else {
-            len
+            None
         }
     }
 }
@@ -382,7 +382,7 @@ mod tests {
         flags[12] = 0b11111111;
         // SAFETY: the input contains fifteen bytes and simd128 is enabled.
         let actual = unsafe { scan(&flags, |bytes| i8x16_bitmask(bytes)) };
-        assert_eq!(actual, 3);
+        assert_eq!(actual, Some(3));
     }
 
     #[test]
@@ -392,7 +392,7 @@ mod tests {
         flags[12] = 0b11111111;
         // SAFETY: the input contains fifteen bytes and simd128 is enabled.
         let actual = unsafe { rscan(&flags, |bytes| i8x16_bitmask(bytes)) };
-        assert_eq!(actual, 12);
+        assert_eq!(actual, Some(12));
     }
 
     #[test]

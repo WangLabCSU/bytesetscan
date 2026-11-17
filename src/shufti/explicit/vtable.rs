@@ -42,9 +42,7 @@ impl VTable {
         // SAFETY: new validated the stored kernel's instruction set. The table
         // supplies two complete 16-byte masks, and every kernel handles all
         // slice lengths, including empty inputs, without reading outside them.
-        let index = unsafe { search(table.low(), table.high(), haystack) };
-        // Kernels use the slice length as the sentinel for an exhausted search.
-        (index != haystack.len()).then_some(index)
+        unsafe { search(table.low(), table.high(), haystack) }
     }
 
     // Reverse scans use their own entry points so the last matching byte is
@@ -59,9 +57,7 @@ impl VTable {
         // SAFETY: new validated the stored reverse kernel's instruction set.
         // Both masks are complete, and each reverse entry point handles empty
         // and short inputs as well as full SIMD blocks within the slice bounds.
-        let index = unsafe { search(table.low(), table.high(), haystack) };
-        // Reverse kernels use the same end sentinel as forward kernels.
-        (index != haystack.len()).then_some(index)
+        unsafe { search(table.low(), table.high(), haystack) }
     }
 }
 
@@ -99,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn search_translates_the_end_sentinel_to_none() {
+    fn search_forwards_none() {
         let table = ShuftiTable::new(b"a").unwrap();
         let vtable = VTable {
             find: exhausted,
@@ -111,8 +107,8 @@ mod tests {
             assert_eq!(vtable.search::<true>(&table, haystack), None);
         }
 
-        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], haystack: &[u8]) -> usize {
-            haystack.len()
+        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], _haystack: &[u8]) -> Option<usize> {
+            None
         }
     }
 
@@ -127,12 +123,12 @@ mod tests {
         assert_eq!(vtable.search::<false>(&table, b"abcd"), Some(0));
         assert_eq!(vtable.search::<true>(&table, b"abcd"), Some(0));
 
-        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> usize {
+        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> Option<usize> {
             let expected = ShuftiTable::new(b"a").unwrap();
             assert_eq!(low, expected.low());
             assert_eq!(high, expected.high());
             assert_eq!(haystack, b"abcd");
-            0
+            Some(0)
         }
     }
 
@@ -151,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn rsearch_translates_the_end_sentinel_to_none() {
+    fn rsearch_forwards_none() {
         let table = ShuftiTable::new(b"a").unwrap();
         let vtable = VTable {
             rfind: exhausted,
@@ -163,8 +159,8 @@ mod tests {
             assert_eq!(vtable.rsearch::<true>(&table, haystack), None);
         }
 
-        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], haystack: &[u8]) -> usize {
-            haystack.len()
+        fn exhausted(_low: &[u8; 16], _high: &[u8; 16], _haystack: &[u8]) -> Option<usize> {
+            None
         }
     }
 
@@ -179,12 +175,12 @@ mod tests {
         assert_eq!(vtable.rsearch::<false>(&table, b"abcd"), Some(0));
         assert_eq!(vtable.rsearch::<true>(&table, b"abcd"), Some(0));
 
-        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> usize {
+        fn check_input(low: &[u8; 16], high: &[u8; 16], haystack: &[u8]) -> Option<usize> {
             let expected = ShuftiTable::new(b"a").unwrap();
             assert_eq!(low, expected.low());
             assert_eq!(high, expected.high());
             assert_eq!(haystack, b"abcd");
-            0
+            Some(0)
         }
     }
 
@@ -197,7 +193,11 @@ mod tests {
         }
     }
 
-    fn entry<const INDEX: usize>(_low: &[u8; 16], _high: &[u8; 16], _haystack: &[u8]) -> usize {
-        INDEX
+    fn entry<const INDEX: usize>(
+        _low: &[u8; 16],
+        _high: &[u8; 16],
+        _haystack: &[u8],
+    ) -> Option<usize> {
+        Some(INDEX)
     }
 }

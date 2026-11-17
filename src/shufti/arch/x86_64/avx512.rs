@@ -9,7 +9,7 @@ pub(in super::super) fn shufti_avx512<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // SAFETY: array loads stay within their initialized storage; dispatch
     // validates CPU support; short inputs are handled before full input loads.
     unsafe {
@@ -26,7 +26,11 @@ pub(in super::super) fn shufti_avx512<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn search512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
+unsafe fn search512<const REVERT: bool>(
+    low: __m128i,
+    high: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // access only enabled bytes; all full loads below stay inside haystack.
     unsafe {
@@ -52,9 +56,9 @@ unsafe fn search512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &
             mask &= valid;
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
-                mask.trailing_zeros() as usize
+                Some(mask.trailing_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         let mut start = 0;
@@ -80,7 +84,7 @@ unsafe fn search512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &
             mask &= valid;
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
-                return mask.trailing_zeros() as usize;
+                return Some(mask.trailing_zeros() as usize);
             }
         }
         // Subtract the end address's remainder modulo 64 from len. Then
@@ -98,12 +102,12 @@ unsafe fn search512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
-                return start + mask.trailing_zeros() as usize;
+                return Some(start + mask.trailing_zeros() as usize);
             }
             start += 64;
         }
         if start == len {
-            return len;
+            return None;
         }
         let last = len - 64;
         // Load all 64 bytes at this address without an alignment requirement.
@@ -117,9 +121,9 @@ unsafe fn search512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
-            last + mask.trailing_zeros() as usize
+            Some(last + mask.trailing_zeros() as usize)
         } else {
-            len
+            None
         }
     }
 }
@@ -130,7 +134,7 @@ pub(in super::super) fn rshufti_avx512<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // SAFETY: array loads stay within their initialized storage; dispatch
     // validates CPU support; short inputs are handled before full input loads.
     unsafe {
@@ -147,7 +151,11 @@ pub(in super::super) fn rshufti_avx512<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn rsearch512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
+unsafe fn rsearch512<const REVERT: bool>(
+    low: __m128i,
+    high: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // touch only enabled bytes; each full load is preceded by a width check.
     unsafe {
@@ -172,9 +180,9 @@ unsafe fn rsearch512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: 
             return if mask != 0 {
                 // 63 - leading_zeros locates the highest set bit in this u64,
                 // which identifies the last selected byte lane.
-                (63 - mask.leading_zeros()) as usize
+                Some((63 - mask.leading_zeros()) as usize)
             } else {
-                len
+                None
             };
         }
 
@@ -206,7 +214,7 @@ unsafe fn rsearch512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: 
                 // 63 - leading_zeros locates the highest set bit in this u64,
                 // which identifies the last selected byte lane.
                 // Add this block's start to return a position in the original input.
-                return end + (63 - mask.leading_zeros()) as usize;
+                return Some(end + (63 - mask.leading_zeros()) as usize);
             }
         }
         // The inner mask gives the start address's remainder modulo 64.
@@ -228,11 +236,11 @@ unsafe fn rsearch512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: 
                 // 63 - leading_zeros locates the highest set bit in this u64,
                 // which identifies the last selected byte lane.
                 // Add this block's start to return a position in the original input.
-                return end + (63 - mask.leading_zeros()) as usize;
+                return Some(end + (63 - mask.leading_zeros()) as usize);
             }
         }
         if end == 0 {
-            return len;
+            return None;
         }
         // len >= 64 guarantees a full prefix; the overlap has already failed.
         // Load all 64 bytes at this address without an alignment requirement.
@@ -246,9 +254,9 @@ unsafe fn rsearch512<const REVERT: bool>(low: __m128i, high: __m128i, haystack: 
         if mask != 0 {
             // 63 - leading_zeros locates the highest set bit in this u64,
             // which identifies the last selected byte lane.
-            (63 - mask.leading_zeros()) as usize
+            Some((63 - mask.leading_zeros()) as usize)
         } else {
-            len
+            None
         }
     }
 }

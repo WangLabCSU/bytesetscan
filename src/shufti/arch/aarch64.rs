@@ -8,7 +8,7 @@ pub(super) fn search<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     if haystack.len() < 4 {
         return super::search_fallback::<REVERT>(low, high, haystack);
     }
@@ -52,7 +52,7 @@ pub(super) fn search<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
+unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> Option<usize> {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping suffix.
     // SAFETY: the entry point establishes NEON support and len >= 4.
@@ -64,12 +64,20 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
         if len < 8 {
             // The entry point and this branch establish 4 <= len < 8.
             let mask = mask8_overlap(haystack, classify);
-            return if mask != 0 { first_index(mask) } else { len };
+            return if mask != 0 {
+                Some(first_index(mask))
+            } else {
+                None
+            };
         }
         if len < 16 {
             // SAFETY: 8 <= len < 16; classify packs independent byte flags.
             let mask = mask16_overlap(haystack, classify);
-            return if mask != 0 { first_index(mask) } else { len };
+            return if mask != 0 {
+                Some(first_index(mask))
+            } else {
+                None
+            };
         }
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds
@@ -78,7 +86,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
         if mask != 0 {
             // Locate the first selected byte using the mask's native bit order.
             // first_index accounts for the four bits per input byte.
-            return first_index(mask);
+            return Some(first_index(mask));
         }
         // Masking the low four address bits gives the remainder modulo 16.
         // 16 - remainder is the distance to the next 16-byte boundary
@@ -95,7 +103,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
                 // Locate the first selected byte using the mask's native bit order.
                 // first_index accounts for the four bits per input byte.
                 // Add this block's start to return a position in the original input.
-                return start + first_index(mask);
+                return Some(start + first_index(mask));
             }
             start += 16;
         }
@@ -107,9 +115,9 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
             // Locate the first selected byte using the mask's native bit order.
             // first_index accounts for the four bits per input byte.
             // Add this block's start to return a position in the original input.
-            last + first_index(mask)
+            Some(last + first_index(mask))
         } else {
-            len
+            None
         }
     }
 }
@@ -131,7 +139,7 @@ pub(super) fn rsearch<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     if haystack.len() < 4 {
         return super::rsearch_fallback::<REVERT>(low, high, haystack);
     }
@@ -175,7 +183,7 @@ pub(super) fn rsearch<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
+unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> Option<usize> {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping prefix.
     // SAFETY: the entry point establishes NEON support and len >= 4.
@@ -187,12 +195,20 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
         if len < 8 {
             // The entry point and this branch establish 4 <= len < 8.
             let mask = mask8_overlap(haystack, classify);
-            return if mask != 0 { last_index(mask) } else { len };
+            return if mask != 0 {
+                Some(last_index(mask))
+            } else {
+                None
+            };
         }
         if len < 16 {
             // SAFETY: 8 <= len < 16; classify packs independent byte flags.
             let mask = mask16_overlap(haystack, classify);
-            return if mask != 0 { last_index(mask) } else { len };
+            return if mask != 0 {
+                Some(last_index(mask))
+            } else {
+                None
+            };
         }
         let last = len - 16;
         // Read sixteen consecutive input bytes into a vector; this load
@@ -203,7 +219,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
             // Locate the last selected byte using the mask's native bit order.
             // last_index accounts for the four bits per input byte.
             // Add this block's start to return a position in the original input.
-            return last + last_index(mask);
+            return Some(last + last_index(mask));
         }
         // The end address's low four bits give its remainder modulo 16.
         // Subtract that remainder from len to round ptr + end down to a
@@ -219,7 +235,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
                 // Locate the last selected byte using the mask's native bit order.
                 // last_index accounts for the four bits per input byte.
                 // Add this block's start to return a position in the original input.
-                return end + last_index(mask);
+                return Some(end + last_index(mask));
             }
         }
         // Read sixteen consecutive input bytes into a vector; this load
@@ -229,9 +245,9 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
         if mask != 0 {
             // Locate the last selected byte using the mask's native bit order.
             // last_index accounts for the four bits per input byte.
-            last_index(mask)
+            Some(last_index(mask))
         } else {
-            len
+            None
         }
     }
 }
@@ -379,7 +395,7 @@ mod tests {
         flags[11] = 0b11111111;
         // SAFETY: NEON is available and the input fills one vector.
         let actual = unsafe { scan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 2);
+        assert_eq!(actual, Some(2));
     }
 
     #[test]
@@ -392,7 +408,7 @@ mod tests {
         flags[55] = 0b11111111;
         // SAFETY: NEON is available and scan bounds all vector loads.
         let actual = unsafe { scan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 35);
+        assert_eq!(actual, Some(35));
     }
 
     #[test]
@@ -405,7 +421,7 @@ mod tests {
         flags[11] = 0b11111111;
         // SAFETY: NEON is available and the input fills one vector.
         let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 11);
+        assert_eq!(actual, Some(11));
     }
 
     #[test]
@@ -418,7 +434,7 @@ mod tests {
         flags[25] = 0b11111111;
         // SAFETY: NEON is available and rscan bounds all vector loads.
         let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 25);
+        assert_eq!(actual, Some(25));
     }
 
     #[test]
@@ -431,7 +447,7 @@ mod tests {
         flags[12] = 0b11111111;
         // SAFETY: NEON is available and the input has at least eight bytes.
         let actual = unsafe { scan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 3);
+        assert_eq!(actual, Some(3));
     }
 
     #[test]
@@ -444,7 +460,7 @@ mod tests {
         flags[12] = 0b11111111;
         // SAFETY: NEON is available and the input has at least eight bytes.
         let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
-        assert_eq!(actual, 12);
+        assert_eq!(actual, Some(12));
     }
 
     #[test]

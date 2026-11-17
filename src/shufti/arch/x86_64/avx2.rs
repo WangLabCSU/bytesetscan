@@ -12,7 +12,7 @@ pub(in super::super) fn shufti_avx2<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     if haystack.len() < 4 {
         return super::super::search_fallback::<REVERT>(low, high, haystack);
     }
@@ -44,7 +44,11 @@ pub(in super::super) fn shufti_avx2<const REVERT: bool>(
 }
 
 #[inline(always)]
-unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
+unsafe fn search<const REVERT: bool>(
+    low: __m128i,
+    high: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX2 support and len >= 16.
     // The short path uses two in-bounds sixteen-byte loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
@@ -63,7 +67,7 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
             }
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
-                return mask.trailing_zeros() as usize;
+                return Some(mask.trailing_zeros() as usize);
             }
             let last = len - 16;
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
@@ -77,9 +81,9 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
-                last + mask.trailing_zeros() as usize
+                Some(last + mask.trailing_zeros() as usize)
             } else {
-                len
+                None
             };
         }
         // Read the 32 bytes starting here without requiring alignment.
@@ -92,7 +96,7 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
         }
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
-            return mask.trailing_zeros() as usize;
+            return Some(mask.trailing_zeros() as usize);
         }
         // After the first unaligned block, advance to the next boundary.
         // Each iteration classifies one vector.
@@ -114,7 +118,7 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
-                return start + mask.trailing_zeros() as usize;
+                return Some(start + mask.trailing_zeros() as usize);
             }
             start += 32;
         }
@@ -129,9 +133,9 @@ unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
-            last + mask.trailing_zeros() as usize
+            Some(last + mask.trailing_zeros() as usize)
         } else {
-            len
+            None
         }
     }
 }
@@ -142,7 +146,7 @@ pub(in super::super) fn rshufti_avx2<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     if haystack.len() < 4 {
         return super::super::rsearch_fallback::<REVERT>(low, high, haystack);
     }
@@ -176,7 +180,11 @@ pub(in super::super) fn rshufti_avx2<const REVERT: bool>(
 // Reverse counterpart to the forward scan: unaligned suffix, aligned interior,
 // then an overlapping prefix. The highest set bit identifies the last match.
 #[inline(always)]
-unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
+unsafe fn rsearch<const REVERT: bool>(
+    low: __m128i,
+    high: __m128i,
+    haystack: &[u8],
+) -> Option<usize> {
     // SAFETY: the entry point establishes AVX2 support and len >= 16.
     // The short path uses two in-bounds sixteen-byte loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
@@ -195,7 +203,7 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
                 mask = !mask;
             }
             if mask != 0 {
-                return last + (31 - (mask as u32).leading_zeros()) as usize;
+                return Some(last + (31 - (mask as u32).leading_zeros()) as usize);
             }
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
@@ -206,9 +214,9 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
                 mask = !mask;
             }
             return if mask != 0 {
-                (31 - (mask as u32).leading_zeros()) as usize
+                Some((31 - (mask as u32).leading_zeros()) as usize)
             } else {
-                len
+                None
             };
         }
         let last = len - 32;
@@ -224,7 +232,7 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
             // Add this block's start to return a position in the original input.
-            return last + (31 - mask.leading_zeros()) as usize;
+            return Some(last + (31 - mask.leading_zeros()) as usize);
         }
         // An already aligned end may cause the initial suffix block to be
         // checked again.
@@ -247,7 +255,7 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
                 // Add this block's start to return a position in the original input.
-                return end + (31 - mask.leading_zeros()) as usize;
+                return Some(end + (31 - mask.leading_zeros()) as usize);
             }
         }
         // Read the 32 bytes starting here without requiring alignment.
@@ -261,9 +269,9 @@ unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u
         if mask != 0 {
             // 31 - leading_zeros locates the highest set bit in this u32,
             // which identifies the last selected byte lane.
-            (31 - mask.leading_zeros()) as usize
+            Some((31 - mask.leading_zeros()) as usize)
         } else {
-            len
+            None
         }
     }
 }

@@ -108,7 +108,7 @@ impl Shufti {
                 low: &[u8; 16],
                 high: &[u8; 16],
                 haystack: &[u8],
-            ) -> usize {
+            ) -> Option<usize> {
                 let search = arch::search_fn::<REVERT>(SimdBackend::new());
                 let caching = if REVERT { &MISMATCH } else { &FIND };
                 caching.store(search as *mut (), Ordering::Relaxed);
@@ -121,11 +121,10 @@ impl Shufti {
             // SAFETY: each cached pointer has the SearchFn signature and is
             // either the initializer or a kernel selected for a supported backend.
             // Every entry point handles its own short-input path.
-            let index = unsafe {
+            unsafe {
                 let search: arch::SearchFn = core::mem::transmute(cached.load(Ordering::Relaxed));
                 search(low, high, haystack)
-            };
-            (index != haystack.len()).then_some(index)
+            }
         }
         #[cfg(not(target_has_atomic = "ptr"))]
         {
@@ -134,8 +133,7 @@ impl Shufti {
             let search = arch::search_fn::<REVERT>(SimdBackend::new());
             // SAFETY: SimdBackend::new selected a supported backend; its entry
             // point handles all slice lengths, including empty slices.
-            let index = unsafe { search(low, high, haystack) };
-            (index != haystack.len()).then_some(index)
+            unsafe { search(low, high, haystack) }
         }
     }
 
@@ -193,7 +191,7 @@ impl Shufti {
                 low: &[u8; 16],
                 high: &[u8; 16],
                 haystack: &[u8],
-            ) -> usize {
+            ) -> Option<usize> {
                 let search = arch::rsearch_fn::<REVERT>(SimdBackend::new());
                 let caching = if REVERT { &RMISMATCH } else { &RFIND };
                 caching.store(search as *mut (), Ordering::Relaxed);
@@ -206,11 +204,10 @@ impl Shufti {
             // SAFETY: each cached pointer has the SearchFn signature and is
             // either the initializer or a kernel selected for a supported backend.
             // Every entry point handles its own short-input path.
-            let index = unsafe {
+            unsafe {
                 let search: arch::SearchFn = core::mem::transmute(cached.load(Ordering::Relaxed));
                 search(low, high, haystack)
-            };
-            (index != haystack.len()).then_some(index)
+            }
         }
         #[cfg(not(target_has_atomic = "ptr"))]
         {
@@ -219,8 +216,7 @@ impl Shufti {
             let search = arch::rsearch_fn::<REVERT>(SimdBackend::new());
             // SAFETY: SimdBackend::new selected a supported backend; its entry
             // point handles all slice lengths, including empty slices.
-            let index = unsafe { search(low, high, haystack) };
-            (index != haystack.len()).then_some(index)
+            unsafe { search(low, high, haystack) }
         }
     }
 

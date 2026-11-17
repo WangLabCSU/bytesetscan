@@ -9,12 +9,12 @@ mod x86_64;
 
 use crate::backend::SimdBackend;
 
-// Each function returns haystack.len() when no match is found. Before calling
+// Each function returns None when no match is found. Before calling
 // a SIMD kernel, establish backend availability; entry points handle all lengths.
 // Selecting or storing a pointer does not execute its target instructions.
 // Function pointers do not carry target_feature requirements, so calling one
 // remains unsafe even when its target is declared as a safe function.
-pub(super) type SearchFn = unsafe fn(&[u8; 16], &[u8; 16], &[u8]) -> usize;
+pub(super) type SearchFn = unsafe fn(&[u8; 16], &[u8; 16], &[u8]) -> Option<usize>;
 
 // Used by automatic dispatch and ShuftiEngine construction. Keeping selection
 // separate from execution lets an engine retain the kernel without scanning
@@ -41,15 +41,14 @@ pub(super) fn search_fallback<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     // Classify one byte and return on a hit
-    // before advancing. An empty or exhausted slice returns the end sentinel.
+    // before advancing. An empty or exhausted slice returns None.
     // Keep this loop scalar so short-input layout experiments compare the
     // same one-byte traversal, without an unrolled or vectorized alternative.
     haystack
         .iter()
         .position(|&byte| find::<REVERT>(low, high, byte))
-        .unwrap_or(haystack.len())
 }
 
 // Reverse scans have their own entry points; membership and nonmembership
@@ -77,11 +76,10 @@ pub(super) fn rsearch_fallback<const REVERT: bool>(
     low: &[u8; 16],
     high: &[u8; 16],
     haystack: &[u8],
-) -> usize {
+) -> Option<usize> {
     haystack
         .iter()
         .rposition(|&byte| find::<REVERT>(low, high, byte))
-        .unwrap_or(haystack.len())
 }
 
 #[inline(always)]

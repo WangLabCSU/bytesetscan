@@ -12,8 +12,8 @@ pub(super) use self::{
 // Each scan handles its initial block, aligned interior blocks, and final
 // overlapping block. SSE4.2 dispatches to SSSE3; VBMI dispatches to AVX-512.
 //
-// Scans return a slice index, using haystack.len() when no byte is selected.
-// Empty slices return the same sentinel. Reverse traversal never constructs
+// Scans return Some(index) for a selected byte, or None when none is found.
+// Empty slices return None. Reverse traversal never constructs
 // a pointer before the slice. REVERT selects nonmembers without changing
 // scan direction. Mask functions are called directly and inlined.
 //
