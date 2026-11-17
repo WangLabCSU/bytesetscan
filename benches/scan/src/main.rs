@@ -6,9 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bytesetscan::{
-    bitset::BitsetEngine, shufti::ShuftiEngine, truffle::TruffleEngine, SimdBackend,
-};
+use bytesetscan::{shufti::ShuftiEngine, truffle::TruffleEngine, SimdBackend};
 use clap::Parser;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use hyperscan::{Algorithm, Backend, Matcher};
@@ -216,7 +214,7 @@ fn backend_name(backend: SimdBackend) -> &'static str {
     }
 }
 
-fn prepare(backend: SimdBackend, needle: &[u8]) -> [Option<Prepared>; 5] {
+fn prepare(backend: SimdBackend, needle: &[u8]) -> [Option<Prepared>; 4] {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     let native = hyperscan_backend(backend)
         .map(|backend| {
@@ -232,7 +230,6 @@ fn prepare(backend: SimdBackend, needle: &[u8]) -> [Option<Prepared>; 5] {
     [
         ShuftiEngine::new(backend, needle).map(Prepared::Shufti),
         TruffleEngine::new(backend, needle).map(Prepared::Truffle),
-        BitsetEngine::new(backend, needle).map(Prepared::Bitset),
         hs_shufti,
         hs_truffle,
     ]
@@ -251,11 +248,11 @@ fn hyperscan_backend(backend: SimdBackend) -> Option<Backend> {
 }
 
 fn measure_case(
-    methods: &[Option<Prepared>; 5],
+    methods: &[Option<Prepared>; 4],
     input: &Input,
     reverse: bool,
     options: &Options,
-) -> [Vec<Sample>; 5] {
+) -> [Vec<Sample>; 4] {
     let active: Vec<_> = methods
         .iter()
         .enumerate()
@@ -263,7 +260,7 @@ fn measure_case(
         .collect();
     let sample_time = Duration::from_millis(options.sample_ms);
     let warmup_time = Duration::from_millis(options.warmup_ms);
-    let mut counts = [0; 5];
+    let mut counts = [0; 4];
     for &(index, method) in &active {
         let estimated = sampling::warmup(
             |count| method.measure(input, reverse, count),
@@ -293,7 +290,6 @@ fn measure_case(
 enum Prepared {
     Shufti(ShuftiEngine),
     Truffle(TruffleEngine),
-    Bitset(BitsetEngine),
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     HsShufti(Matcher),
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -305,7 +301,6 @@ impl Prepared {
         match self {
             Self::Shufti(_) => "Shufti",
             Self::Truffle(_) => "Truffle",
-            Self::Bitset(_) => "Bitset",
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             Self::HsShufti(_) => "Hyperscan Shufti",
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -324,13 +319,6 @@ impl Prepared {
                 }
             }
             Self::Truffle(m) => {
-                if reverse {
-                    m.rfind(haystack)
-                } else {
-                    m.find(haystack)
-                }
-            }
-            Self::Bitset(m) => {
                 if reverse {
                     m.rfind(haystack)
                 } else {
@@ -357,9 +345,6 @@ impl Prepared {
                 measure_direction(|h| m.find(h), |h| m.rfind(h), haystack, reverse, iterations)
             }
             Self::Truffle(m) => {
-                measure_direction(|h| m.find(h), |h| m.rfind(h), haystack, reverse, iterations)
-            }
-            Self::Bitset(m) => {
                 measure_direction(|h| m.find(h), |h| m.rfind(h), haystack, reverse, iterations)
             }
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -421,8 +406,8 @@ mod tests {
     #[test]
     fn prepare_leaves_hyperscan_missing_for_fallback() {
         let methods = prepare(SimdBackend::Fallback, b"a");
+        assert!(methods[2].is_none());
         assert!(methods[3].is_none());
-        assert!(methods[4].is_none());
     }
 
     #[cfg(target_arch = "aarch64")]
@@ -432,7 +417,7 @@ mod tests {
             return;
         }
         let methods = prepare(SimdBackend::Neon, b"a");
-        assert!(methods[..3].iter().all(Option::is_some));
-        assert!(methods[3..].iter().all(Option::is_none));
+        assert!(methods[..2].iter().all(Option::is_some));
+        assert!(methods[2..].iter().all(Option::is_none));
     }
 }

@@ -1,6 +1,6 @@
 # bytesetscan
 
-Byte-set membership and search using Shufti, Truffle, and Bitset.
+Byte-set membership and search using Shufti and Truffle.
 
 The needle is a set of byte values. Build a matcher once and reuse it to find
 delimiters, validate an alphabet, or locate token boundaries. For example,
@@ -46,7 +46,8 @@ assert_eq!(bytes.mismatch(&[0, 128, 7]), Some(2));
 ```
 
 `finder()` yields the positions of bytes in the needle; `mismatcher()` yields
-the positions of bytes outside it. Both methods are available on all three matchers and their explicit engines. Use `.rev()` to iterate backwards, or alternate between
+the positions of bytes outside it. Both matchers and their explicit engines
+provide these methods. Use `.rev()` to iterate backwards, or alternate between
 `next()` and `next_back()`:
 
 ```rust
@@ -62,8 +63,6 @@ assert!(whitespace.mismatcher(b"a b\tc").eq([0, 2, 4]));
 | ----------------------------------------- | ---------------------------------------------------------------------------- |
 | `Shufti::new(needle)`                     | Builds an exact matcher, or returns `None` if the set cannot be represented. |
 | `Shufti::with_case(ignore_case, needle)`  | Builds a matcher with configurable ASCII case handling, with the same limit. |
-| `Bitset::new(needle)`                     | Builds an exact matcher for any byte set.                                    |
-| `Bitset::with_case(ignore_case, needle)`  | Builds a matcher with configurable ASCII case handling for any byte set.     |
 | `Truffle::new(needle)`                    | Builds an exact matcher for any byte set.                                    |
 | `Truffle::with_case(ignore_case, needle)` | Builds a matcher with configurable ASCII case handling for any byte set.     |
 
@@ -172,10 +171,10 @@ test accepts exactly the marked cells. No second verification step is needed.
 
 ### Choosing a matcher
 
-`Shufti`, `Truffle`, and `Bitset` each occupy 32 bytes.
+`Shufti` and `Truffle` each occupy 32 bytes.
 `Shufti::new` returns `Option<Self>` because
 some byte sets cannot be represented by Shufti's eight group flags.
-`Truffle::new` and `Bitset::new` return `Self` and accept any byte set.
+`Truffle::new` returns `Self` and accepts any byte set.
 
 The Shufti limit counts **distinct nonempty row patterns**, not bytes in the set:
 
@@ -245,39 +244,13 @@ input byte's top bit and tests the selected bit. The algorithm is described in
 Hyperscan's [table construction](https://github.com/intel/hyperscan/blob/master/src/nfa/trufflecompile.cpp)
 and [Truffle search](https://github.com/intel/hyperscan/blob/master/src/nfa/truffle.c).
 
-## How Bitset works
-
-Bitset assigns one bit to each possible byte value. Four `u64` words cover all
-256 values in 32 bytes. For a byte `b`, `b / 64` selects the word and `b % 64`
-selects the bit to test. Inserting a byte sets that bit; duplicates leave the
-set unchanged. No grouping or table-construction failure is needed.
-
-For example, `0x41` (65) selects word 1, bit 1; `0xC1` (193) selects word 3,
-bit 1. These positions are independent, so either byte can be present without
-the other. A search checks bytes against this bitset and stops at the
-first result in the requested direction.
-
-For SIMD lookup, the same bits form a 32-byte table: `b >> 3` selects a
-byte, and `1 << (b & 0b00000111)` selects its bit. This lets each SIMD lane
-test membership directly in the bitset.
-
-```rust
-use bytesetscan::bitset::Bitset;
-
-let bytes = Bitset::new(&[0x00, 0x41, 0xC1, 0xFF]);
-assert_eq!(bytes.find(&[0x42, 0xC1, 0xFF]), Some(1));
-assert_eq!(bytes.rfind(&[0x42, 0xC1, 0xFF]), Some(2));
-assert_eq!(bytes.mismatch(&[0x41, 0x42, 0xC1]), Some(1));
-```
-
 | Matcher   | Table storage | Byte sets accepted              | Search                    |
 | --------- | ------------- | ------------------------------- | ------------------------- |
 | `Shufti`  | 32 bytes      | Up to eight distinct row groups | SIMD with scalar fallback |
 | `Truffle` | 32 bytes      | Any byte set                    | SIMD with scalar fallback |
-| `Bitset`  | 32 bytes      | Any byte set                    | SIMD with scalar fallback |
 
 Shufti uses fewer table lookups per SIMD block, while Truffle accepts arbitrary
-byte sets. Bitset gives each possible byte its own membership bit. Compare representative workloads on the processors you intend to
+byte sets. Compare representative workloads on the processors you intend to
 support; these differences alone do not establish a performance ranking.
 
 ## Inspecting the needle
@@ -301,7 +274,7 @@ letter, regardless of the constructor's input.
 
 ## SIMD support
 
-Shufti, Truffle, and Bitset select a supported SIMD implementation automatically:
+Shufti and Truffle select a supported SIMD implementation automatically:
 
 | Build configuration        | Standard library | Automatic SIMD selection                                           |
 | -------------------------- | ---------------- | ------------------------------------------------------------------ |
@@ -322,14 +295,13 @@ The crate has no third-party runtime dependencies.
 
 ### Selecting a backend
 
-Use `ShuftiEngine`, `TruffleEngine`, or `BitsetEngine` to specify a backend.
+Use `ShuftiEngine` or `TruffleEngine` to specify a backend.
 Each is available in its algorithm's module, alongside the automatic matcher.
 
 `ShuftiEngine::new(backend, needle)` returns `None` if the backend is unavailable
 or the needle cannot be represented; see [choosing a matcher](#choosing-a-matcher)
-for the accepted byte sets. `TruffleEngine::new(backend, needle)` and
-`BitsetEngine::new(backend, needle)` accept every byte set and return `None`
-only when the backend is unavailable.
+for the accepted byte sets. `TruffleEngine::new(backend, needle)` accepts every
+byte set and returns `None` only when the backend is unavailable.
 
 ```rust
 use bytesetscan::{shufti::ShuftiEngine, SimdBackend};
@@ -365,7 +337,7 @@ construction.
 
 ## Benchmarks
 
-The [scan benchmark](benches/README.md) compares Shufti, Truffle, and Bitset
+The [scan benchmark](benches/README.md) compares Shufti and Truffle
 `find` and `rfind` with Hyperscan's Shufti and Truffle implementations.
 It checks results before timing and reports median nanoseconds per search with
 the observed minimum and maximum:

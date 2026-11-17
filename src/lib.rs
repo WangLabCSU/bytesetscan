@@ -2,7 +2,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod backend;
-pub mod bitset;
 pub mod shufti;
 pub mod truffle;
 

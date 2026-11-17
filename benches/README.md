@@ -1,6 +1,6 @@
 # Scan benchmark
 
-Compare the public Shufti, Truffle, and Bitset engine interfaces with the
+Compare the public Shufti and Truffle engine interfaces with the
 original Hyperscan Shufti and Truffle searches. Like
 [leftover's reader benchmark](https://github.com/WangLabCSU/leftover/tree/main/benches),
 this runner verifies results, warms up, rotates method order, and prints a
@@ -77,7 +77,7 @@ backend produces an error and lists the available choices.
 
 No implementation silently substitutes another backend. A missing backend,
 unsupported native platform, or unrepresentable needle leaves its cell as `—`.
-The current controlled needles fit all three Rust algorithms. Hyperscan's
+The current controlled needles fit both Rust algorithms. Hyperscan's
 upstream CPU targets can require additional features, so its cell can also be
 missing when the corresponding Rust backend is available.
 

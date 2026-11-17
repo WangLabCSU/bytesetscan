@@ -28,7 +28,7 @@ pub(super) fn rows(
     len: usize,
     hit: Hit,
     reverse: bool,
-    results: [Option<Summary>; 5],
+    results: [Option<Summary>; 4],
 ) {
     let hit = hit_name(hit);
     let operation = if reverse { "rfind" } else { "find" };
@@ -38,11 +38,10 @@ pub(super) fn rows(
         .map(|result| result.median)
         .fold(f64::INFINITY, f64::min);
     let color = io::stdout().is_terminal() && env::var_os("NO_COLOR").is_none();
-    let [shufti, truffle, bitset, hs_shufti, hs_truffle] = results;
+    let [shufti, truffle, hs_shufti, hs_truffle] = results;
     for (search, algorithm, ours, reference) in [
         (operation, "Shufti", shufti, hs_shufti),
         ("", "Truffle", truffle, hs_truffle),
-        ("", "Bitset", bitset, None),
     ] {
         let pair = [ours, reference];
         let row_best = pair
@@ -106,9 +105,9 @@ pub(super) fn write_samples(
     len: usize,
     hit: Hit,
     reverse: bool,
-    samples: &[Vec<Sample>; 5],
+    samples: &[Vec<Sample>; 4],
 ) -> io::Result<()> {
-    const METHODS: [&str; 5] = ["Shufti", "Truffle", "Bitset", "HS Shufti", "HS Truffle"];
+    const METHODS: [&str; 4] = ["Shufti", "Truffle", "HS Shufti", "HS Truffle"];
     let hit = hit_name(hit);
     let operation = if reverse { "rfind" } else { "find" };
     for (method, batches) in METHODS.iter().zip(samples) {
