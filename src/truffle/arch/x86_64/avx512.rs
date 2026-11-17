@@ -34,7 +34,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // access only enabled bytes; all full loads below stay inside haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // Masked loads let AVX-512 process a short slice without touching
         // adjacent bytes. Masking the classification result is also necessary:
@@ -45,7 +45,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, base.cast()));
+            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -64,8 +64,8 @@ pub(super) unsafe fn search512<const REVERT: bool>(
         let mut start = 0;
         // The low six address bits give the remainder modulo 64. When it is
         // nonzero, 64 - remainder is the distance to the next 64-byte boundary.
-        // Scan that prefix first; an aligned base starts the main loop at 0.
-        let misalignment = base as usize & 0b00111111;
+        // Scan that prefix first; an aligned ptr starts the main loop at 0.
+        let misalignment = ptr as usize & 0b00111111;
         if misalignment != 0 {
             start = 64 - misalignment;
             let valid = u64::MAX >> (64 - start);
@@ -73,7 +73,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, base.cast()));
+            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -91,7 +91,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
         while start < last {
             // Load all 64 bytes from the 64-byte-aligned interior position;
             // the loop bounds also guarantee a complete vector remains.
-            let mut mask = mask64(lower, upper, _mm512_load_si512(base.add(start).cast()));
+            let mut mask = mask64(lower, upper, _mm512_load_si512(ptr.add(start).cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -106,7 +106,7 @@ pub(super) unsafe fn search512<const REVERT: bool>(
         }
         // Load all 64 bytes at this address without an alignment requirement.
         // The full-vector path keeps the entire read inside haystack.
-        let mut mask = mask64(lower, upper, _mm512_loadu_si512(base.add(last).cast()));
+        let mut mask = mask64(lower, upper, _mm512_loadu_si512(ptr.add(last).cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -153,7 +153,7 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // touch only enabled bytes; each full load is preceded by a width check.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         if len < 64 {
             let valid = u64::MAX.checked_shr((64 - len) as u32).unwrap_or(0);
@@ -161,7 +161,7 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
             // disabled lanes are zero-filled. No 64-byte alignment is required.
             // Classification is masked again below so zero-filled lanes cannot
             // be reported even if byte value zero matches the needle.
-            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, base.cast()));
+            let mut mask = mask64(lower, upper, _mm512_maskz_loadu_epi8(valid, ptr.cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -185,7 +185,7 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
         let last = len - 64;
         // Load all 64 bytes at this address without an alignment requirement.
         // The full-vector path keeps the entire read inside haystack.
-        let mut mask = mask64(lower, upper, _mm512_loadu_si512(base.add(last).cast()));
+        let mut mask = mask64(lower, upper, _mm512_loadu_si512(ptr.add(last).cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -198,14 +198,14 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
             return last + (63 - mask.leading_zeros()) as usize;
         }
         // The end address's low six bits give its remainder modulo 64.
-        // Subtract that remainder from len to round base + end down to a
+        // Subtract that remainder from len to round ptr + end down to a
         // 64-byte boundary. The initial suffix scan covered the skipped bytes.
-        let mut end = len - (base.add(len) as usize & 0b00111111);
+        let mut end = len - (ptr.add(len) as usize & 0b00111111);
         while end > 64 {
             end -= 64;
             // Load all 64 bytes from the 64-byte-aligned interior position;
             // the loop bounds also guarantee a complete vector remains.
-            let mut mask = mask64(lower, upper, _mm512_load_si512(base.add(end).cast()));
+            let mut mask = mask64(lower, upper, _mm512_load_si512(ptr.add(end).cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -221,7 +221,7 @@ pub(super) unsafe fn rsearch512<const REVERT: bool>(
         // The final full prefix is also read when it overlaps an earlier block.
         // Load all 64 bytes at this address without an alignment requirement.
         // The full-vector path keeps the entire read inside haystack.
-        let mut mask = mask64(lower, upper, _mm512_loadu_si512(base.cast()));
+        let mut mask = mask64(lower, upper, _mm512_loadu_si512(ptr.cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.

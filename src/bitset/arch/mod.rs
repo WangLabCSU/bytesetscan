@@ -102,11 +102,11 @@ fn contains(bits: &[u64; 4], byte: u8) -> bool {
 #[inline(always)]
 unsafe fn scan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8) -> u64) -> usize {
     debug_assert!(haystack.len() >= WIDTH);
-    let base = haystack.as_ptr();
+    let ptr = haystack.as_ptr();
     let len = haystack.len();
     let last = len - WIDTH;
     // The first block may be unaligned. The entry point guarantees WIDTH bytes.
-    let mask = classify(base);
+    let mask = classify(ptr);
     if mask != 0 {
         return mask.trailing_zeros() as usize;
     }
@@ -115,12 +115,12 @@ unsafe fn scan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8)
     }
     // WIDTH is a power of two, so masking with WIDTH - 1 gives the address's
     // remainder modulo WIDTH. Subtract it from WIDTH to reach the next boundary;
-    // an already aligned base advances by WIDTH because its block was checked.
-    let mut start = WIDTH - (base as usize & (WIDTH - 1));
+    // an already aligned ptr advances by WIDTH because its block was checked.
+    let mut start = WIDTH - (ptr as usize & (WIDTH - 1));
     while start < last {
         // SAFETY: start < len - WIDTH, so the full aligned block lies inside
         // haystack. Advancing by WIDTH preserves alignment without skipping bytes.
-        let mask = classify(unsafe { base.add(start) });
+        let mask = classify(unsafe { ptr.add(start) });
         if mask != 0 {
             return start + mask.trailing_zeros() as usize;
         }
@@ -128,7 +128,7 @@ unsafe fn scan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8)
     }
     // SAFETY: last = len - WIDTH makes this full, possibly unaligned suffix
     // end exactly at the slice boundary. Any overlap was already rejected.
-    let mask = classify(unsafe { base.add(last) });
+    let mask = classify(unsafe { ptr.add(last) });
     if mask != 0 {
         last + mask.trailing_zeros() as usize
     } else {
@@ -145,11 +145,11 @@ unsafe fn scan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8)
 #[inline(always)]
 unsafe fn rscan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8) -> u64) -> usize {
     debug_assert!(haystack.len() >= WIDTH);
-    let base = haystack.as_ptr();
+    let ptr = haystack.as_ptr();
     let len = haystack.len();
     let last = len - WIDTH;
     // SAFETY: last = len - WIDTH places this full block at the end of haystack.
-    let mask = classify(unsafe { base.add(last) });
+    let mask = classify(unsafe { ptr.add(last) });
     if mask != 0 {
         return last + (63 - mask.leading_zeros()) as usize;
     }
@@ -157,9 +157,9 @@ unsafe fn rscan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8
         return len;
     }
     // The end address's remainder modulo WIDTH gives its distance past the
-    // preceding aligned boundary. Subtract it from len to align base + end.
+    // preceding aligned boundary. Subtract it from len to align ptr + end.
     // SAFETY: adding len gives the valid one-past-the-end pointer.
-    let remainder = unsafe { base.add(len) } as usize & (WIDTH - 1);
+    let remainder = unsafe { ptr.add(len) } as usize & (WIDTH - 1);
     let mut end = len - remainder;
     if remainder == 0 {
         // The suffix was already aligned and checked. Move past that block
@@ -170,14 +170,14 @@ unsafe fn rscan<const WIDTH: usize>(haystack: &[u8], classify: impl Fn(*const u8
         end -= WIDTH;
         // SAFETY: this aligned block precedes the checked suffix and remains
         // inside haystack. Decreasing end by WIDTH preserves alignment.
-        let mask = classify(unsafe { base.add(end) });
+        let mask = classify(unsafe { ptr.add(end) });
         if mask != 0 {
             return end + (63 - mask.leading_zeros()) as usize;
         }
     }
     // The prefix may be unaligned and overlap a rejected block. All WIDTH bytes
     // are inside haystack, and leading_zeros still identifies the last match.
-    let mask = classify(base);
+    let mask = classify(ptr);
     if mask != 0 {
         (63 - mask.leading_zeros()) as usize
     } else {
@@ -210,13 +210,13 @@ mod tests {
     fn scan_aligns_interior_blocks() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[3..200];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: haystack contains at least 64 bytes. Returning zero makes
         // scan visit every block without requiring a particular SIMD backend.
         let end = unsafe {
-            scan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            scan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             })
         };
@@ -230,12 +230,12 @@ mod tests {
     fn scan_does_not_repeat_an_aligned_prefix() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[..192];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: the slice contains three complete 64-byte blocks.
         unsafe {
-            scan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            scan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             });
         }
@@ -246,12 +246,12 @@ mod tests {
     fn scan_reads_a_single_block_once() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[3..67];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: the unaligned slice contains exactly one complete block.
         unsafe {
-            scan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            scan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             });
         }
@@ -262,13 +262,13 @@ mod tests {
     fn rscan_aligns_interior_blocks() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[3..200];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: haystack contains at least 64 bytes. Zero masks keep the
         // reverse scan running through its aligned interior and final prefix.
         let end = unsafe {
-            rscan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            rscan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             })
         };
@@ -280,12 +280,12 @@ mod tests {
     fn rscan_does_not_repeat_an_aligned_suffix() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[..192];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: the slice contains three complete 64-byte blocks.
         unsafe {
-            rscan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            rscan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             });
         }
@@ -296,12 +296,12 @@ mod tests {
     fn rscan_reads_a_single_block_once() {
         let storage = Aligned([0; 256]);
         let haystack = &storage.0[3..67];
-        let base = haystack.as_ptr() as usize;
+        let ptr = haystack.as_ptr();
         let visited = RefCell::new(Vec::new());
         // SAFETY: the unaligned slice contains exactly one complete block.
         unsafe {
-            rscan::<64>(haystack, |ptr| {
-                visited.borrow_mut().push(ptr as usize - base);
+            rscan::<64>(haystack, |block_ptr| {
+                visited.borrow_mut().push(block_ptr as usize - ptr as usize);
                 0
             });
         }

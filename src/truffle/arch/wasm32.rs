@@ -94,7 +94,7 @@ fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // SAFETY: this module is compiled only with simd128 enabled.
     // Short inputs use initialized local storage. All full input loads remain inside haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // truffleMini/truffleRevMini: zero padding is excluded after classification.
         if len < 16 {
@@ -115,7 +115,7 @@ fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(v128_load(base.cast()));
+        let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             return mask.trailing_zeros() as usize;
@@ -124,13 +124,13 @@ fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         // 16 - remainder is the distance to the next 16-byte boundary
         // (16 bytes if already aligned). The initial block was checked,
         // so any overlap contains only rejected bytes.
-        let mut start = 16 - (base as usize & 0b00001111);
+        let mut start = 16 - (ptr as usize & 0b00001111);
         let last = len - 16;
         while start < last {
             // Read sixteen consecutive input bytes into a vector; this load
             // does not require a 16-byte-aligned address. The scan bounds or
             // initialized short-input buffer guarantee all sixteen bytes exist.
-            let mask = classify(v128_load(base.add(start).cast()));
+            let mask = classify(v128_load(ptr.add(start).cast()));
             if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 // Add this block's start to return a position in the original input.
@@ -141,7 +141,7 @@ fn scan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(v128_load(base.add(last).cast()));
+        let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // The lowest set bit identifies the first selected lane.
             // Add this block's start to return a position in the original input.
@@ -243,7 +243,7 @@ fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
     // SAFETY: this module is compiled only with simd128 enabled.
     // Short inputs use initialized local storage. All full input loads remain inside haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // truffleMini/truffleRevMini: zero padding is excluded after classification.
         if len < 16 {
@@ -266,7 +266,7 @@ fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(v128_load(base.add(last).cast()));
+        let mask = classify(v128_load(ptr.add(last).cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
             // which identifies the last selected byte lane.
@@ -274,15 +274,15 @@ fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
             return last + 15 - mask.leading_zeros() as usize;
         }
         // The end address's low four bits give its remainder modulo 16.
-        // Subtract that remainder from len to round base + end down to a
+        // Subtract that remainder from len to round ptr + end down to a
         // 16-byte boundary. The initial suffix scan covered the skipped bytes.
-        let mut end = len - (base.add(len) as usize & 0b00001111);
+        let mut end = len - (ptr.add(len) as usize & 0b00001111);
         while end > 16 {
             end -= 16;
             // Read sixteen consecutive input bytes into a vector; this load
             // does not require a 16-byte-aligned address. The scan bounds or
             // initialized short-input buffer guarantee all sixteen bytes exist.
-            let mask = classify(v128_load(base.add(end).cast()));
+            let mask = classify(v128_load(ptr.add(end).cast()));
             if mask != 0 {
                 // 15 - leading_zeros locates the highest set bit in this u16,
                 // which identifies the last selected byte lane.
@@ -293,7 +293,7 @@ fn rscan(haystack: &[u8], classify: impl Fn(v128) -> u16) -> usize {
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(v128_load(base.cast()));
+        let mask = classify(v128_load(ptr.cast()));
         if mask != 0 {
             // 15 - leading_zeros locates the highest set bit in this u16,
             // which identifies the last selected byte lane.

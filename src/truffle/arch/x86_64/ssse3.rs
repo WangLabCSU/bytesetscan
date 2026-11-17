@@ -36,7 +36,7 @@ pub(super) unsafe fn search128<const REVERT: bool>(
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // Copy a short slice into a zeroed vector, then exclude the padded
         // lanes from the result.
@@ -63,7 +63,7 @@ pub(super) unsafe fn search128<const REVERT: bool>(
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(lower, upper, _mm_loadu_si128(base.cast()));
+        let mut mask = mask16(lower, upper, _mm_loadu_si128(ptr.cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -79,12 +79,12 @@ pub(super) unsafe fn search128<const REVERT: bool>(
         // 16 - remainder is the distance to the next 16-byte boundary
         // (16 bytes if already aligned). The initial block was checked,
         // so any overlap contains only rejected bytes.
-        let mut start = 16 - (base as usize & 0b00001111);
+        let mut start = 16 - (ptr as usize & 0b00001111);
         let last = len - 16;
         while start < last {
             // Load sixteen bytes from the 16-byte-aligned interior address;
             // the loop excludes positions without a complete input vector.
-            let mut mask = mask16(lower, upper, _mm_load_si128(base.add(start).cast()));
+            let mut mask = mask16(lower, upper, _mm_load_si128(ptr.add(start).cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -99,7 +99,7 @@ pub(super) unsafe fn search128<const REVERT: bool>(
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(lower, upper, _mm_loadu_si128(base.add(last).cast()));
+        let mut mask = mask16(lower, upper, _mm_loadu_si128(ptr.add(last).cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -149,7 +149,7 @@ pub(super) unsafe fn rsearch128<const REVERT: bool>(
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // Copy a short slice into a zeroed vector, then exclude the padded
         // lanes from the result.
@@ -178,7 +178,7 @@ pub(super) unsafe fn rsearch128<const REVERT: bool>(
         let last = len - 16;
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(lower, upper, _mm_loadu_si128(base.add(last).cast()));
+        let mut mask = mask16(lower, upper, _mm_loadu_si128(ptr.add(last).cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -190,15 +190,15 @@ pub(super) unsafe fn rsearch128<const REVERT: bool>(
         // An already aligned end may cause the initial suffix block to be
         // checked again.
         // The end address's low four bits give its remainder modulo 16.
-        // Subtract that remainder from len to round base + end down to a
+        // Subtract that remainder from len to round ptr + end down to a
         // 16-byte boundary. The initial suffix scan covered the skipped bytes.
-        let mut end = len - (base.add(len) as usize & 0b00001111);
+        let mut end = len - (ptr.add(len) as usize & 0b00001111);
         // The source compares buf_end with buf + 16 before decrementing.
         while end > 16 {
             end -= 16;
             // Load sixteen bytes from the 16-byte-aligned interior address;
             // the loop excludes positions without a complete input vector.
-            let mut mask = mask16(lower, upper, _mm_load_si128(base.add(end).cast()));
+            let mut mask = mask16(lower, upper, _mm_load_si128(ptr.add(end).cast()));
             if !REVERT {
                 // Convert the classifier's nonmember bits into member bits. This
                 // changes the predicate only; forward/reverse bit ordering is unchanged.
@@ -210,7 +210,7 @@ pub(super) unsafe fn rsearch128<const REVERT: bool>(
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
-        let mut mask = mask16(lower, upper, _mm_loadu_si128(base.cast()));
+        let mut mask = mask16(lower, upper, _mm_loadu_si128(ptr.cast()));
         if !REVERT {
             // Convert the classifier's nonmember bits into member bits. This
             // changes the predicate only; forward/reverse bit ordering is unchanged.

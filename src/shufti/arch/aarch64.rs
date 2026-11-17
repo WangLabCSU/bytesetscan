@@ -59,12 +59,12 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
     // SAFETY: SIMD support is established by the entry point along with len >= 16.
     // All full input loads remain inside haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(vld1q_u8(base));
+        let mask = classify(vld1q_u8(ptr));
         if mask != 0 {
             // Locate the first selected byte using the mask's native bit order.
             // first_index accounts for the four bits per input byte.
@@ -74,13 +74,13 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
         // 16 - remainder is the distance to the next 16-byte boundary
         // (16 bytes if already aligned). The initial block was checked,
         // so any overlap contains only rejected bytes.
-        let mut start = 16 - (base as usize & 0b0000_1111);
+        let mut start = 16 - (ptr as usize & 0b0000_1111);
         let last = len - 16;
         while start < last {
             // Read sixteen consecutive input bytes into a vector; this load
             // does not require a 16-byte-aligned address. The scan bounds or
             // initialized short-input buffer guarantee all sixteen bytes exist.
-            let mask = classify(vld1q_u8(base.add(start)));
+            let mask = classify(vld1q_u8(ptr.add(start)));
             if mask != 0 {
                 // Locate the first selected byte using the mask's native bit order.
                 // first_index accounts for the four bits per input byte.
@@ -92,7 +92,7 @@ unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(vld1q_u8(base.add(last)));
+        let mask = classify(vld1q_u8(ptr.add(last)));
         if mask != 0 {
             // Locate the first selected byte using the mask's native bit order.
             // first_index accounts for the four bits per input byte.
@@ -172,13 +172,13 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
     // SAFETY: SIMD support is established by the entry point along with len >= 16.
     // All full input loads remain inside haystack.
     unsafe {
-        let base = haystack.as_ptr();
+        let ptr = haystack.as_ptr();
         let len = haystack.len();
         let last = len - 16;
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(vld1q_u8(base.add(last)));
+        let mask = classify(vld1q_u8(ptr.add(last)));
         if mask != 0 {
             // Locate the last selected byte using the mask's native bit order.
             // last_index accounts for the four bits per input byte.
@@ -186,15 +186,15 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
             return last + last_index(mask);
         }
         // The end address's low four bits give its remainder modulo 16.
-        // Subtract that remainder from len to round base + end down to a
+        // Subtract that remainder from len to round ptr + end down to a
         // 16-byte boundary. The initial suffix scan covered the skipped bytes.
-        let mut end = len - (base.add(len) as usize & 0b0000_1111);
+        let mut end = len - (ptr.add(len) as usize & 0b0000_1111);
         while end > 16 {
             end -= 16;
             // Read sixteen consecutive input bytes into a vector; this load
             // does not require a 16-byte-aligned address. The scan bounds or
             // initialized short-input buffer guarantee all sixteen bytes exist.
-            let mask = classify(vld1q_u8(base.add(end)));
+            let mask = classify(vld1q_u8(ptr.add(end)));
             if mask != 0 {
                 // Locate the last selected byte using the mask's native bit order.
                 // last_index accounts for the four bits per input byte.
@@ -205,7 +205,7 @@ unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize 
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
-        let mask = classify(vld1q_u8(base));
+        let mask = classify(vld1q_u8(ptr));
         if mask != 0 {
             // Locate the last selected byte using the mask's native bit order.
             // last_index accounts for the four bits per input byte.
