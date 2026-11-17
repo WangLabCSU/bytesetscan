@@ -6,16 +6,13 @@ rust-version = "1.89"
 description = "A high-performance Byte-set membership matching librar"
 license = "MIT"
 readme = "README.md"
-include = ["src/**", "Cargo.toml", "README.md", "LICENSE"]
+include = ["src/**", "benches/**", "Cargo.toml", "README.md", "LICENSE"]
 keywords = ["shufti", "simd", "search", "bytes"]
 categories = ["algorithms", "text-processing", "no-std"]
 
 [features]
 default = ["std"]
 std = []
-
-[target.'cfg(target_os = "linux")'.dev-dependencies]
-libc = "0.2"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -24,3 +21,11 @@ all-features = true
 lto = true
 codegen-units = 1
 strip = "debuginfo"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc = "0.2"
+
+[[bench]]
+name = "scan"
+path = "benches/scan/main.rs"
+harness = false

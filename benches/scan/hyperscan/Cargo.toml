@@ -1,0 +1,12 @@
+[package]
+name = "hyperscan"
+version = "0.0.0"
+edition = "2021"
+publish = false
+links = "scan_hyperscan"
+build = "build/main.rs"
+
+[build-dependencies]
+cc = "1"
+cmake = "0.1"
+ureq = "3"

@@ -363,6 +363,23 @@ Searches take linear time in the haystack length in the worst case. Reuse a
 matcher across slices when the needle stays the same to avoid repeating
 construction.
 
+## Benchmarks
+
+The [scan benchmark](benches/README.md) compares Shufti, Truffle, and Bitset
+`find` and `rfind` with Hyperscan's Shufti and Truffle implementations.
+It checks results before timing and reports median nanoseconds per search with
+the observed minimum and maximum:
+
+```sh
+cargo bench --bench scan
+```
+
+Use `cargo bench --bench scan -- --help` for inputs, backends, and measurement
+time budgets. The default backend follows `SimdBackend::new()`; unsupported
+implementations display `—`. Table construction is excluded from timing.
+The separate benchmark workspace builds Hyperscan on Linux x86-64;
+ordinary library builds and tests do not require it.
+
 ## Checking the documentation
 
 The README is also the crate-level API documentation. Run its Rust examples and

@@ -1,0 +1,20 @@
+[package]
+name = "scan"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+members = ["hyperscan"]
+resolver = "2"
+
+[dependencies]
+bytesetscan = { path = "../.." }
+clap = { version = "4.5", features = ["derive"] }
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+hyperscan = { path = "hyperscan" }
+
+[profile.release]
+lto = true
+codegen-units = 1
