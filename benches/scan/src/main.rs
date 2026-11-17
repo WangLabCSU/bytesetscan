@@ -22,7 +22,11 @@ use self::sampling::Sample;
 #[command(about = "Compare byte-set find/rfind across available backends")]
 struct Options {
     /// Haystack lengths in bytes; may be repeated or comma-separated.
-    #[arg(long, value_delimiter = ',', default_value = "1,7,15,64,1024")]
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "7,15,64,128,256,512,1024"
+    )]
     size: Vec<usize>,
     /// Number of distinct needle bytes, from 1 through 255.
     #[arg(long, value_delimiter = ',', default_value = "4,16,64", value_parser = clap::value_parser!(u16).range(1..=255))]
