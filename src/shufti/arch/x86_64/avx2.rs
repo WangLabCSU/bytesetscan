@@ -3,6 +3,8 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
+use super::ssse3::{rsearch_short, search_short};
+
 /// # Safety
 /// The CPU must support AVX2.
 #[target_feature(enable = "avx2")]
@@ -11,9 +13,19 @@ pub(in super::super) fn shufti_avx2<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    // Use scalar matching when the input cannot fill a 16-byte vector.
-    if haystack.len() < 16 {
+    if haystack.len() < 8 {
         return super::super::search_fallback::<REVERT>(low, high, haystack);
+    }
+    if haystack.len() < 16 {
+        // SAFETY: AVX2 enables SSSE3; both table loads are in bounds and
+        // the checks above establish the helper's 8..15-byte input range.
+        return unsafe {
+            search_short::<REVERT>(
+                _mm_loadu_si128(low.as_ptr().cast()),
+                _mm_loadu_si128(high.as_ptr().cast()),
+                haystack,
+            )
+        };
     }
     // SAFETY: each array supplies exactly one initialized 16-byte vector;
     // dispatch establishes CPU support and the short-input check above
@@ -34,7 +46,7 @@ pub(in super::super) fn shufti_avx2<const REVERT: bool>(
 #[inline(always)]
 unsafe fn search<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes AVX2 support and len >= 16.
-    // The short path uses two in-bounds 16-byte loads.
+    // The short path uses two in-bounds sixteen-byte loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
         let ptr = haystack.as_ptr();
@@ -131,9 +143,19 @@ pub(in super::super) fn rshufti_avx2<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    // Use scalar matching when the input cannot fill a 16-byte vector.
-    if haystack.len() < 16 {
+    if haystack.len() < 8 {
         return super::super::rsearch_fallback::<REVERT>(low, high, haystack);
+    }
+    if haystack.len() < 16 {
+        // SAFETY: AVX2 enables SSSE3; both table loads are in bounds and
+        // the checks above establish the helper's 8..15-byte input range.
+        return unsafe {
+            rsearch_short::<REVERT>(
+                _mm_loadu_si128(low.as_ptr().cast()),
+                _mm_loadu_si128(high.as_ptr().cast()),
+                haystack,
+            )
+        };
     }
     // SAFETY: each array supplies exactly one initialized 16-byte vector;
     // dispatch establishes CPU support and the short-input check above
@@ -156,7 +178,7 @@ pub(in super::super) fn rshufti_avx2<const REVERT: bool>(
 #[inline(always)]
 unsafe fn rsearch<const REVERT: bool>(low: __m128i, high: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes AVX2 support and len >= 16.
-    // The short path uses two in-bounds 16-byte loads.
+    // The short path uses two in-bounds sixteen-byte loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
     unsafe {
         let ptr = haystack.as_ptr();

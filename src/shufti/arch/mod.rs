@@ -93,7 +93,7 @@ fn find<const REVERT: bool>(low: &[u8; 16], high: &[u8; 16], byte: u8) -> bool {
     // R uses low[2] & high[5] = 0b00000011 & 0b00000010, accepting it;
     // Q uses low[1] & high[5] = 0b00000001 & 0b00000010 = 0b00000000.
     // SAFETY: masking a byte to its low four bits produces an index in 0..16.
-    let lo = unsafe { low.get_unchecked((byte & 0b00001111) as usize) };
+    let lo = unsafe { low.get_unchecked((byte & 0b0000_1111) as usize) };
     // SAFETY: shifting a u8 right by four also produces an index in 0..16.
     let hi = unsafe { high.get_unchecked((byte >> 4) as usize) };
 

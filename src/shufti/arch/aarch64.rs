@@ -9,12 +9,11 @@ pub(super) fn search<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    // Use scalar matching when the input cannot fill a 16-byte vector.
-    if haystack.len() < 16 {
+    if haystack.len() < 8 {
         return super::search_fallback::<REVERT>(low, high, haystack);
     }
     // SAFETY: dispatch establishes SIMD support; the check above ensures
-    // at least 16 input bytes before entering the vector scan.
+    // at least eight input bytes before entering the vector scan.
     // Table loads and every scan load below stay within initialized slices.
     unsafe {
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
@@ -56,11 +55,16 @@ pub(super) fn search<const REVERT: bool>(
 unsafe fn scan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping suffix.
-    // SAFETY: SIMD support is established by the entry point along with len >= 16.
-    // All full input loads remain inside haystack.
+    // SAFETY: the entry point establishes NEON support and len >= 8.
+    // Short inputs use two overlapping eight-byte loads; full loads stay in bounds.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
+        if len < 16 {
+            // SAFETY: 8 <= len < 16; classify packs independent byte flags.
+            let mask = mask16_overlap(haystack, classify);
+            return if mask != 0 { first_index(mask) } else { len };
+        }
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
         // initialized short-input buffer guarantee all sixteen bytes exist.
@@ -122,12 +126,11 @@ pub(super) fn rsearch<const REVERT: bool>(
     high: &[u8; 16],
     haystack: &[u8],
 ) -> usize {
-    // Use scalar matching when the input cannot fill a 16-byte vector.
-    if haystack.len() < 16 {
+    if haystack.len() < 8 {
         return super::rsearch_fallback::<REVERT>(low, high, haystack);
     }
     // SAFETY: dispatch establishes SIMD support; the check above ensures
-    // at least 16 input bytes before entering the vector scan.
+    // at least eight input bytes before entering the vector scan.
     // Table loads and every scan load below stay within initialized slices.
     unsafe {
         // Load all sixteen table entries into sixteen u8 lanes. No nibble
@@ -169,11 +172,16 @@ pub(super) fn rsearch<const REVERT: bool>(
 unsafe fn rscan(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> usize {
     // Scan an initial unaligned vector,
     // aligned one-vector loop, then the overlapping prefix.
-    // SAFETY: SIMD support is established by the entry point along with len >= 16.
-    // All full input loads remain inside haystack.
+    // SAFETY: the entry point establishes NEON support and len >= 8.
+    // Short inputs use two overlapping eight-byte loads; full loads stay in bounds.
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
+        if len < 16 {
+            // SAFETY: 8 <= len < 16; classify packs independent byte flags.
+            let mask = mask16_overlap(haystack, classify);
+            return if mask != 0 { last_index(mask) } else { len };
+        }
         let last = len - 16;
         // Read sixteen consecutive input bytes into a vector; this load
         // does not require a 16-byte-aligned address. The scan bounds or
@@ -229,6 +237,42 @@ fn last_index(mask: u64) -> usize {
     (63 - zeros as usize) / 4
 }
 
+/// Returns four selected bits per input byte in native order, with unused bits clear.
+///
+/// # Safety
+/// The CPU must support NEON, and `haystack` must contain 8 to 15 bytes.
+/// `classify` must classify each byte independently and pack its flags with
+/// `selected_mask`.
+#[inline(always)]
+unsafe fn mask16_overlap(haystack: &[u8], classify: impl Fn(uint8x16_t) -> u64) -> u64 {
+    // SAFETY: both eight-byte loads are entirely inside the 8..15-byte slice
+    // and permit unaligned addresses. vcombine_u8 initializes all sixteen lanes.
+    unsafe {
+        let ptr = haystack.as_ptr();
+        let last = haystack.len() - 8;
+        let prefix = vld1_u8(ptr);
+        let suffix = vld1_u8(ptr.add(last));
+        // Join byte lanes [0..8] and [last..len]. For len = 15 this gives
+        // [0, ..., 7 | 7, ..., 14]: input byte 7 occurs in both halves.
+        let mask = classify(vcombine_u8(prefix, suffix));
+        // Each half contributes 32 bits: four per byte. Move the suffix's
+        // flags from vector positions 8..15 to input positions last..len.
+        // Duplicate positions have identical flags, so OR merges the overlap.
+        #[cfg(target_endian = "little")]
+        {
+            // The prefix occupies the low 32 bits. Bring the suffix down to
+            // bit 0, then move it up by four bits per preceding input byte.
+            (mask & 0b1111_1111_1111_1111_1111_1111_1111_1111) | ((mask >> 32) << (last * 4))
+        }
+        #[cfg(target_endian = "big")]
+        {
+            // The prefix occupies the high 32 bits. Bring the suffix up to
+            // the same end, then move it down by four bits per preceding byte.
+            (mask & !0b1111_1111_1111_1111_1111_1111_1111_1111u64) | ((mask << 32) >> (last * 4))
+        }
+    }
+}
+
 // Pack 0b00000000/0b11111111 byte flags into four bits per input byte.
 // Keep native bit order: byte i starts at bit 4*i on little-endian and
 // bit 4*(15-i) on big-endian. The scanners choose the corresponding end
@@ -249,7 +293,7 @@ unsafe fn selected_mask(selected: uint8x16_t) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{rscan, scan, selected_mask, vld1q_u8};
+    use super::{mask16_overlap, rscan, scan, selected_mask, vld1q_u8};
     use crate::SimdBackend;
 
     #[test]
@@ -320,5 +364,69 @@ mod tests {
         // SAFETY: NEON is available and rscan bounds all vector loads.
         let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
         assert_eq!(actual, 25);
+    }
+
+    #[test]
+    fn scan_returns_the_first_selected_byte_in_overlapping_input() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        let mut flags = [0u8; 15];
+        flags[3] = 0b11111111;
+        flags[12] = 0b11111111;
+        // SAFETY: NEON is available and the input has at least eight bytes.
+        let actual = unsafe { scan(&flags, |bytes| selected_mask(bytes)) };
+        assert_eq!(actual, 3);
+    }
+
+    #[test]
+    fn rscan_returns_the_last_selected_byte_in_overlapping_input() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        let mut flags = [0u8; 15];
+        flags[3] = 0b11111111;
+        flags[12] = 0b11111111;
+        // SAFETY: NEON is available and the input has at least eight bytes.
+        let actual = unsafe { rscan(&flags, |bytes| selected_mask(bytes)) };
+        assert_eq!(actual, 12);
+    }
+
+    #[test]
+    fn mask16_overlap_preserves_each_selected_bytes_position() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        for len in 8..16 {
+            for position in 0..len {
+                let mut flags = [0u8; 15];
+                flags[position] = 0b11111111;
+                // SAFETY: NEON is available; the slice has 8..15 bytes and
+                // selected_mask packs these whole-byte flags independently.
+                let mask = unsafe { mask16_overlap(&flags[..len], |bytes| selected_mask(bytes)) };
+                #[cfg(target_endian = "little")]
+                let expected = 0b1111u64 << (position * 4);
+                #[cfg(target_endian = "big")]
+                let expected = 0b1111u64 << ((15 - position) * 4);
+                assert_eq!(mask, expected, "len={len}, byte={position}");
+            }
+        }
+    }
+
+    #[test]
+    fn mask16_overlap_clears_bits_past_the_input() {
+        if !SimdBackend::Neon.is_available() {
+            return;
+        }
+        // All fifteen bytes are selected; the unused sixteenth group stays clear.
+        let flags = [0b11111111; 15];
+        // SAFETY: NEON is available, the input has fifteen bytes, and
+        // selected_mask packs these whole-byte flags independently.
+        let mask = unsafe { mask16_overlap(&flags, |bytes| selected_mask(bytes)) };
+        #[cfg(target_endian = "little")]
+        let expected = u64::MAX >> 4;
+        #[cfg(target_endian = "big")]
+        let expected = u64::MAX << 4;
+        assert_eq!(mask, expected);
     }
 }

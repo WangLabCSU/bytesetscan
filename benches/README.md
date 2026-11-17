@@ -21,13 +21,13 @@ cargo bench --bench scan
 cargo bench --bench scan -- --help
 
 # Compare short and long slices on every available backend.
-cargo bench --bench scan -- --backend all --size 15,16,31,32,63,64,1024,16384,65536
+cargo bench --bench scan -- --backend all --size 1,7,15,16,31,32,63,64,1024,16384,65536
 
 # Select needle sizes and match positions.
 cargo bench --bench scan -- --needle-size 1,8,16,24,32,48,64,96,128,192,255 --hit miss,first,middle,last
 
 # Verify the selected cases without timing.
-cargo bench --bench scan -- --test --backend all --size 0,1,15,16,17,31,32,33,63,64,65,4096
+cargo bench --bench scan -- --test --backend all --size 0,1,7,15,16,17,31,32,33,63,64,65,4096
 
 # Repeat the 64-byte needle / 1,024-byte haystack comparison and save samples.
 cargo bench --bench scan -- --size 1024 --needle-size 64 --hit miss --samples target/scan-samples.csv
@@ -39,19 +39,19 @@ cargo bench --bench scan -- --size 1024 --needle-size 16 --rounds 5 --warmup-ms 
 cargo bench --bench scan -- --backend neon
 ```
 
-| Option          | Default            | Meaning                                                                                       |
-| --------------- | ------------------ | --------------------------------------------------------------------------------------------- |
-| `--size`        | `15,64,1024`       | Haystack lengths in bytes.                                                                    |
-| `--needle-size` | `4,16,64`          | Distinct needle bytes, from 1 through 255.                                                    |
-| `--hit`         | `middle,miss`      | `miss`, `first`, `middle`, or `last` match placement.                                         |
-| `--backend`     | `auto`             | Automatic selection, `all`, or a backend from the table below.                                |
-| `--rounds`      | `10`               | Recorded batches per method and search case.                                                  |
-| `--warmup-ms`   | `30`               | Minimum warmup time per method and case.                                                      |
-| `--sample-ms`   | `10`               | Minimum duration of each recorded batch.                                                      |
-| `--iterations`  | Automatic          | Override the batch duration with a fixed search count; conflicts with explicit `--sample-ms`. |
-| `--samples`     | Off                | CSV path for every recorded batch's count and elapsed time.                                   |
-| `--offset`      | `1`                | Haystack address modulo 64, from 0 through 63.                                                |
-| `--test`        | Off                | Check results without timing.                                                                 |
+| Option          | Default          | Meaning                                                                                       |
+| --------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `--size`        | `1,7,15,64,1024` | Haystack lengths in bytes.                                                                    |
+| `--needle-size` | `4,16,64`        | Distinct needle bytes, from 1 through 255.                                                    |
+| `--hit`         | `middle,miss`    | `miss`, `first`, `middle`, or `last` match placement.                                         |
+| `--backend`     | `auto`           | Automatic selection, `all`, or a backend from the table below.                                |
+| `--rounds`      | `10`             | Recorded batches per method and search case.                                                  |
+| `--warmup-ms`   | `30`             | Minimum warmup time per method and case.                                                      |
+| `--sample-ms`   | `10`             | Minimum duration of each recorded batch.                                                      |
+| `--iterations`  | Automatic        | Override the batch duration with a fixed search count; conflicts with explicit `--sample-ms`. |
+| `--samples`     | Off              | CSV path for every recorded batch's count and elapsed time.                                   |
+| `--offset`      | `1`              | Haystack address modulo 64, from 0 through 63.                                                |
+| `--test`        | Off              | Check results without timing.                                                                 |
 
 Sizes, needle sizes, and hit positions accept comma-separated values or
 repeated options. Each needle contains bytes `0..size`; each haystack contains
