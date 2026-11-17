@@ -27,11 +27,7 @@ pub(in super::super) fn truffle_ssse3<const REVERT: bool>(
 
 // SSSE3 and SSE4.2 share the initial/aligned/final 16-byte scan.
 #[inline(always)]
-pub(super) unsafe fn search128<const REVERT: bool>(
-    lower: __m128i,
-    upper: __m128i,
-    haystack: &[u8],
-) -> usize {
+unsafe fn search128<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes SSSE3 support.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.
@@ -140,11 +136,7 @@ pub(in super::super) fn rtruffle_ssse3<const REVERT: bool>(
 // Reverse counterpart to the forward scan: unaligned suffix, aligned interior,
 // then an overlapping prefix. The highest set bit identifies the last match.
 #[inline(always)]
-pub(super) unsafe fn rsearch128<const REVERT: bool>(
-    lower: __m128i,
-    upper: __m128i,
-    haystack: &[u8],
-) -> usize {
+unsafe fn rsearch128<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes SSSE3 support.
     // The short path is handled before full-width loads.
     // Aligned interior loads and the final overlapping vector stay in haystack.

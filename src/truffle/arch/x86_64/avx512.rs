@@ -26,11 +26,7 @@ pub(in super::super) fn truffle_avx512<const REVERT: bool>(
 }
 
 #[inline(always)]
-pub(super) unsafe fn search512<const REVERT: bool>(
-    lower: __m128i,
-    upper: __m128i,
-    haystack: &[u8],
-) -> usize {
+unsafe fn search512<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // access only enabled bytes; all full loads below stay inside haystack.
     unsafe {
@@ -145,11 +141,7 @@ pub(in super::super) fn rtruffle_avx512<const REVERT: bool>(
 }
 
 #[inline(always)]
-pub(super) unsafe fn rsearch512<const REVERT: bool>(
-    lower: __m128i,
-    upper: __m128i,
-    haystack: &[u8],
-) -> usize {
+unsafe fn rsearch512<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &[u8]) -> usize {
     // SAFETY: the entry point establishes AVX-512F/BW support. Masked loads
     // touch only enabled bytes; each full load is preceded by a width check.
     unsafe {

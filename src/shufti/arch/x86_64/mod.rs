@@ -1,20 +1,16 @@
 mod avx2;
 mod avx512;
-mod sse42;
 mod ssse3;
-mod vbmi;
 
 pub(super) use self::{
     avx2::{rshufti_avx2, shufti_avx2},
     avx512::{rshufti_avx512, shufti_avx512},
-    sse42::{rshufti_sse42, shufti_sse42},
     ssse3::{rshufti_ssse3, shufti_ssse3},
-    vbmi::{rshufti_vbmi, shufti_vbmi},
 };
 
 // The mask classifiers identify nonmembers in blocks of 16, 32, or 64 bytes.
 // Each scan handles its initial block, aligned interior blocks, and final
-// overlapping block. SSE4.2 shares the SSSE3 scan; VBMI shares the AVX-512 scan.
+// overlapping block. SSE4.2 dispatches to SSSE3; VBMI dispatches to AVX-512.
 //
 // Scans return a slice index, using haystack.len() when no byte is selected.
 // Empty slices return the same sentinel. Reverse traversal never constructs

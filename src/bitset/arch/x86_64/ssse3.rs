@@ -91,7 +91,7 @@ pub(in super::super) fn rbitset_ssse3<const REVERT: bool>(
 
 #[inline]
 #[target_feature(enable = "ssse3")]
-pub(super) fn mask16<const REVERT: bool>(
+fn mask16<const REVERT: bool>(
     lower: __m128i,
     upper: __m128i,
     bit_masks: __m128i,

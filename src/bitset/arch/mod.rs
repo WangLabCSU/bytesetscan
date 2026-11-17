@@ -25,9 +25,7 @@ pub(super) fn search_fn<const REVERT: bool>(backend: SimdBackend) -> SearchFn {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx2 => x86_64::bitset_avx2::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Ssse3 => x86_64::bitset_ssse3::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Sse4_2 => x86_64::bitset_sse42::<REVERT>,
+        SimdBackend::Ssse3 | SimdBackend::Sse4_2 => x86_64::bitset_ssse3::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx512 => x86_64::bitset_avx512::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -58,9 +56,7 @@ pub(super) fn rsearch_fn<const REVERT: bool>(backend: SimdBackend) -> SearchFn {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx2 => x86_64::rbitset_avx2::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Ssse3 => x86_64::rbitset_ssse3::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Sse4_2 => x86_64::rbitset_sse42::<REVERT>,
+        SimdBackend::Ssse3 | SimdBackend::Sse4_2 => x86_64::rbitset_ssse3::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx512 => x86_64::rbitset_avx512::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

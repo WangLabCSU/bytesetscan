@@ -25,13 +25,9 @@ pub(super) fn search_fn<const REVERT: bool>(backend: SimdBackend) -> SearchFn {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx2 => x86_64::shufti_avx2::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Ssse3 => x86_64::shufti_ssse3::<REVERT>,
+        SimdBackend::Ssse3 | SimdBackend::Sse4_2 => x86_64::shufti_ssse3::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Sse4_2 => x86_64::shufti_sse42::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Avx512 => x86_64::shufti_avx512::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Avx512Vbmi => x86_64::shufti_vbmi::<REVERT>,
+        SimdBackend::Avx512 | SimdBackend::Avx512Vbmi => x86_64::shufti_avx512::<REVERT>,
         #[cfg(target_arch = "aarch64")]
         SimdBackend::Neon => aarch64::search::<REVERT>,
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
@@ -65,13 +61,9 @@ pub(super) fn rsearch_fn<const REVERT: bool>(backend: SimdBackend) -> SearchFn {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         SimdBackend::Avx2 => x86_64::rshufti_avx2::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Ssse3 => x86_64::rshufti_ssse3::<REVERT>,
+        SimdBackend::Ssse3 | SimdBackend::Sse4_2 => x86_64::rshufti_ssse3::<REVERT>,
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Sse4_2 => x86_64::rshufti_sse42::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Avx512 => x86_64::rshufti_avx512::<REVERT>,
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        SimdBackend::Avx512Vbmi => x86_64::rshufti_vbmi::<REVERT>,
+        SimdBackend::Avx512 | SimdBackend::Avx512Vbmi => x86_64::rshufti_avx512::<REVERT>,
         #[cfg(target_arch = "aarch64")]
         SimdBackend::Neon => aarch64::rsearch::<REVERT>,
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
