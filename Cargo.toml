@@ -7,7 +7,7 @@ description = "A high-performance Byte-set membership matching librar"
 license = "MIT"
 readme = "README.md"
 include = ["src/**", "benches/**", "Cargo.toml", "README.md", "LICENSE"]
-keywords = ["shufti", "simd", "search", "bytes"]
+keywords = ["shufti", "truffle", "simd", "search", "bytes"]
 categories = ["algorithms", "text-processing", "no-std"]
 
 [features]
