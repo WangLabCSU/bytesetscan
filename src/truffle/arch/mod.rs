@@ -86,6 +86,7 @@ fn find<const REVERT: bool>(lower: &[u8; 16], upper: &[u8; 16], byte: u8) -> boo
     // The top bit chooses the table half. Bits 0..3 index its byte and
     // bits 4..6 select the membership bit, covering all 256 possible values.
     let half = if byte < 128 { lower } else { upper };
-    let flags = half[(byte & 0b0000_1111) as usize];
-    (flags & (0b0000_0001 << ((byte >> 4) & 0b0000_0111)) != 0) != REVERT
+    //SAFETY: we only extract low nibble as the index, it must < 16
+    let flags = unsafe { half.get_unchecked((byte & 0b0000_1111) as usize) };
+    (flags & (1 << ((byte >> 4) & 0b0000_0111)) != 0) != REVERT
 }

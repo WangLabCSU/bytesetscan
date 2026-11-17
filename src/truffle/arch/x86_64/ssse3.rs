@@ -34,28 +34,9 @@ unsafe fn search128<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // Copy a short slice into a zeroed vector, then exclude the padded
-        // lanes from the result.
         if len < 16 {
-            let mut bytes = [0u8; 16];
-            bytes[..len].copy_from_slice(haystack);
-            // Load sixteen consecutive bytes without assuming 16-byte alignment.
-            // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16(lower, upper, _mm_loadu_si128(bytes.as_ptr().cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
-            // Discard positions outside the actual input, including any padding
-            // whose zero byte happened to satisfy the selected predicate.
-            mask &= u16::MAX.checked_shr((16 - len) as u32).unwrap_or(0);
-            return if mask != 0 {
-                // The lowest set bit identifies the first selected lane.
-                mask.trailing_zeros() as usize
-            } else {
-                len
-            };
+            // SAFETY: the input is short and this entry establishes SSSE3 support.
+            return search_short::<REVERT>(lower, upper, haystack);
         }
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
         // The short path or scan bounds guarantee all sixteen are readable.
@@ -143,29 +124,9 @@ unsafe fn rsearch128<const REVERT: bool>(lower: __m128i, upper: __m128i, haystac
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // Copy a short slice into a zeroed vector, then exclude the padded
-        // lanes from the result.
         if len < 16 {
-            let mut bytes = [0u8; 16];
-            bytes[..len].copy_from_slice(haystack);
-            // Load sixteen consecutive bytes without assuming 16-byte alignment.
-            // The short path or scan bounds guarantee all sixteen are readable.
-            let mut mask = mask16(lower, upper, _mm_loadu_si128(bytes.as_ptr().cast()));
-            if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
-            }
-            // Discard positions outside the actual input, including any padding
-            // whose zero byte happened to satisfy the selected predicate.
-            mask &= u16::MAX.checked_shr((16 - len) as u32).unwrap_or(0);
-            return if mask != 0 {
-                // 15 - leading_zeros locates the highest set bit in this u16,
-                // which identifies the last selected byte lane.
-                (15 - mask.leading_zeros()) as usize
-            } else {
-                len
-            };
+            // SAFETY: the input is short and this entry establishes SSSE3 support.
+            return rsearch_short::<REVERT>(lower, upper, haystack);
         }
         let last = len - 16;
         // Load sixteen consecutive bytes without assuming 16-byte alignment.
@@ -216,10 +177,137 @@ unsafe fn rsearch128<const REVERT: bool>(lower: __m128i, upper: __m128i, haystac
     }
 }
 
+/// Finds the first member, or the first nonmember when `REVERT` is true.
+/// Returns `haystack.len()` if no such byte exists.
+///
+/// # Safety
+/// The CPU must support SSSE3, and `haystack` must contain fewer than 16 bytes.
+#[inline(always)]
+pub(super) unsafe fn search_short<const REVERT: bool>(
+    lower: __m128i,
+    upper: __m128i,
+    haystack: &[u8],
+) -> usize {
+    // SAFETY: the caller establishes SSSE3 support and len < 16.
+    // Inputs shorter than eight bytes are copied into an initialized array;
+    // the remaining inputs meet mask16_overlap's 8..15-byte requirement.
+    unsafe {
+        let len = haystack.len();
+        if len < 8 {
+            let mut bytes = [0u8; 16];
+            bytes[..len].copy_from_slice(haystack);
+            let mut mask = mask16(lower, upper, _mm_loadu_si128(bytes.as_ptr().cast()));
+            if !REVERT {
+                // Select members rather than the classifier's nonmembers.
+                mask = !mask;
+            }
+            // Padding may satisfy either predicate. Keep only actual positions;
+            // len < 8 makes the shift valid, including an empty input.
+            mask &= (1u16 << len) - 1;
+            return if mask != 0 {
+                mask.trailing_zeros() as usize
+            } else {
+                len
+            };
+        }
+        let mut mask = mask16_overlap(lower, upper, haystack);
+        if !REVERT {
+            // Inversion sets bits at and above len. A real match precedes them;
+            // with no match, trailing_zeros returns len, our end sentinel.
+            mask = !mask;
+        }
+        if mask != 0 {
+            mask.trailing_zeros() as usize
+        } else {
+            len
+        }
+    }
+}
+
+/// Finds the last member, or the last nonmember when `REVERT` is true.
+/// Returns `haystack.len()` if no such byte exists.
+///
+/// # Safety
+/// The CPU must support SSSE3, and `haystack` must contain fewer than 16 bytes.
+#[inline(always)]
+pub(super) unsafe fn rsearch_short<const REVERT: bool>(
+    lower: __m128i,
+    upper: __m128i,
+    haystack: &[u8],
+) -> usize {
+    // SAFETY: the caller establishes SSSE3 support and len < 16.
+    // Inputs shorter than eight bytes are copied into an initialized array;
+    // the remaining inputs meet mask16_overlap's 8..15-byte requirement.
+    unsafe {
+        let len = haystack.len();
+        if len < 8 {
+            let mut bytes = [0u8; 16];
+            bytes[..len].copy_from_slice(haystack);
+            let mut mask = mask16(lower, upper, _mm_loadu_si128(bytes.as_ptr().cast()));
+            if !REVERT {
+                // Select members rather than the classifier's nonmembers.
+                mask = !mask;
+            }
+            // Padding may satisfy either predicate. Clear its bits before
+            // the reverse scan; the shift is also valid for an empty input.
+            mask &= (1u16 << len) - 1;
+            return if mask != 0 {
+                (15 - mask.leading_zeros()) as usize
+            } else {
+                len
+            };
+        }
+        let mut mask = mask16_overlap(lower, upper, haystack);
+        if !REVERT {
+            // Inversion sets every bit above the input. Clear them before
+            // looking for the highest match; otherwise bit 15 wins.
+            mask = !mask & ((1u16 << len) - 1);
+        }
+        if mask != 0 {
+            (15 - mask.leading_zeros()) as usize
+        } else {
+            len
+        }
+    }
+}
+
+/// Returns one nonmember bit per input byte, with higher bits clear.
+///
+/// # Safety
+/// The CPU must support SSSE3, and `haystack` must contain 8 to 15 bytes.
+#[inline(always)]
+unsafe fn mask16_overlap(lower: __m128i, upper: __m128i, haystack: &[u8]) -> u16 {
+    // SAFETY: the caller establishes SSSE3 support and 8 <= len < 16.
+    // The loads read exactly haystack[0..8] and haystack[len - 8..len].
+    // Each reads eight bytes without requiring alignment, despite taking a
+    // __m128i pointer. Their values and both table vectors are initialized,
+    // so the combined vector meets mask16's requirements.
+    unsafe {
+        let last = haystack.len() - 8;
+        let prefix = _mm_loadl_epi64(haystack.as_ptr().cast());
+        let suffix = _mm_loadl_epi64(haystack.as_ptr().add(last).cast());
+        // Put the prefix in the lower eight lanes and the suffix in the upper
+        // eight. For 15 bytes, input positions are [0, ..., 7 | 7, ..., 14]:
+        // position 7 occurs twice in the vector.
+        let bytes = _mm_unpacklo_epi64(prefix, suffix);
+        let mask = mask16(lower, upper, bytes);
+        // Low eight flags already have their input positions. Move the suffix
+        // flags down to its actual starting position, len - 8, then combine.
+        // Duplicate bytes have identical flags, so OR preserves membership.
+        // The result has one bit per original byte, with higher bits clear.
+        (mask & 0b1111_1111) | ((mask >> 8) << last)
+    }
+}
+
+/// Returns one nonmember bit for each byte lane, starting at bit zero.
+///
+/// # Safety
+/// The CPU must support SSSE3.
 #[inline(always)]
 unsafe fn mask16(lower: __m128i, upper: __m128i, bytes: __m128i) -> u16 {
-    // SAFETY: the caller has established SSSE3 support. The SSSE3 and
-    // SSE4.2 scans share this classifier for a single 16-byte block.
+    // SAFETY: the caller establishes SSSE3 support, including when inlined
+    // into an AVX2 entry point. All inputs are initialized vector values;
+    // the shuffles, shifts and comparisons perform no pointer-based reads.
     unsafe {
         // set1_epi8(0b10000000u8 as i8) repeats the bit pattern 0b10000000 in every byte.
         // This is the shuffle index's zeroing bit, not a signed comparison.
@@ -262,5 +350,100 @@ unsafe fn mask16(lower: __m128i, upper: __m128i, bytes: __m128i) -> u16 {
         // membership bits as 0b11111111 and present bits as 0b00000000. movemask packs
         // each byte's top bit into the corresponding scalar position bit.
         _mm_movemask_epi8(_mm_cmpeq_epi8(member, _mm_setzero_si128())) as u16
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{_mm_loadu_si128, mask16_overlap, rsearch_short, search_short};
+    use crate::{truffle::TruffleTable, SimdBackend};
+
+    #[test]
+    fn search_short_returns_len_when_no_short_input_byte_matches() {
+        if !SimdBackend::Ssse3.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'!'; 15];
+        for len in 8..=15 {
+            // SAFETY: SSSE3 is available, both table arrays contain 16 bytes,
+            // and search_short handles this slice length without reading outside it.
+            let position = unsafe {
+                search_short::<false>(
+                    _mm_loadu_si128(table.lower().as_ptr().cast()),
+                    _mm_loadu_si128(table.upper().as_ptr().cast()),
+                    &haystack[..len],
+                )
+            };
+            // Inversion leaves the first set bit at len, not at a real match.
+            assert_eq!(position, len);
+        }
+    }
+
+    #[test]
+    fn rsearch_short_returns_the_last_of_fifteen_members() {
+        if !SimdBackend::Ssse3.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'a'; 15];
+        // SAFETY: SSSE3 is available and both table arrays contain 16 bytes.
+        // rsearch_short handles this short slice with in-bounds eight-byte loads.
+        let position = unsafe {
+            rsearch_short::<false>(
+                _mm_loadu_si128(table.lower().as_ptr().cast()),
+                _mm_loadu_si128(table.upper().as_ptr().cast()),
+                &haystack,
+            )
+        };
+        // Bit 15 becomes set on inversion but is outside the input.
+        assert_eq!(position, 14);
+    }
+
+    #[test]
+    fn mask16_overlap_preserves_each_nonmembers_position() {
+        if !SimdBackend::Ssse3.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        // Vary the overlap from eight duplicate bytes down to one. Only '!'
+        // is a nonmember, so exactly its original position must be set.
+        for len in 8..=15 {
+            for position in 0..len {
+                let mut haystack = [b'a'; 15];
+                haystack[position] = b'!';
+                // SAFETY: SSSE3 is available, the tables each contain 16 bytes,
+                // and the short classifier receives between 8 and 15 bytes.
+                let mask = unsafe {
+                    mask16_overlap(
+                        _mm_loadu_si128(table.lower().as_ptr().cast()),
+                        _mm_loadu_si128(table.upper().as_ptr().cast()),
+                        &haystack[..len],
+                    )
+                };
+                assert_eq!(mask, 1 << position, "len={len}, position={position}");
+            }
+        }
+    }
+
+    #[test]
+    fn mask16_overlap_excludes_the_sixteenth_lane_for_fifteen_nonmembers() {
+        if !SimdBackend::Ssse3.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'!'; 15];
+        // SAFETY: SSSE3 is available, both table loads cover initialized arrays,
+        // and the 15-byte slice meets the short classifier's length contract.
+        let mask = unsafe {
+            mask16_overlap(
+                _mm_loadu_si128(table.lower().as_ptr().cast()),
+                _mm_loadu_si128(table.upper().as_ptr().cast()),
+                &haystack,
+            )
+        };
+        // Fifteen real bytes are nonmembers. The duplicated byte in the
+        // sixteenth SIMD lane must not create an out-of-slice result bit.
+        assert_eq!(mask, 0b0111_1111_1111_1111);
     }
 }

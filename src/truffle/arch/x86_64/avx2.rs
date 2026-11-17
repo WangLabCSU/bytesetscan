@@ -3,6 +3,8 @@ use core::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use core::arch::x86_64::*;
 
+use super::ssse3::{rsearch_short, search_short};
+
 /// # Safety
 /// The CPU must support AVX2.
 #[target_feature(enable = "avx2")]
@@ -34,22 +36,20 @@ unsafe fn search<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: &
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // Copy a short slice into a zeroed vector, then exclude the padded
-        // lanes from the result.
+        if len < 16 {
+            // SAFETY: the input is shorter than 16 bytes. AVX2 provides the
+            // SSSE3 instructions used by this shared, inlined short-input scan.
+            return search_short::<REVERT>(lower, upper, haystack);
+        }
         if len < 32 {
-            let mut bytes = [0u8; 32];
-            bytes[..len].copy_from_slice(haystack);
-            // Read 32 consecutive bytes with no alignment requirement. For a
-            // short-input buffer the initialized padding is excluded after classification.
-            let mut mask = mask32(lower, upper, _mm256_loadu_si256(bytes.as_ptr().cast()));
+            // SAFETY: the preceding branch excludes len < 16. Both overlapping
+            // 16-byte loads fit in this 16..31-byte input; AVX2 is enabled.
+            let mut mask = mask32_overlap(lower, upper, haystack);
             if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
+                // Inversion sets bits at and above len. They follow every real
+                // position, so no member makes trailing_zeros return len.
                 mask = !mask;
             }
-            // Discard positions outside the actual input, including any padding
-            // whose zero byte happened to satisfy the selected predicate.
-            mask &= u32::MAX.checked_shr((32 - len) as u32).unwrap_or(0);
             return if mask != 0 {
                 // The lowest set bit identifies the first selected lane.
                 mask.trailing_zeros() as usize
@@ -144,22 +144,21 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // Copy a short slice into a zeroed vector, then exclude the padded
-        // lanes from the result.
+        if len < 16 {
+            // SAFETY: the input is shorter than 16 bytes. AVX2 provides the
+            // SSSE3 instructions used by this shared, inlined short-input scan.
+            return rsearch_short::<REVERT>(lower, upper, haystack);
+        }
         if len < 32 {
-            let mut bytes = [0u8; 32];
-            bytes[..len].copy_from_slice(haystack);
-            // Read 32 consecutive bytes with no alignment requirement. For a
-            // short-input buffer the initialized padding is excluded after classification.
-            let mut mask = mask32(lower, upper, _mm256_loadu_si256(bytes.as_ptr().cast()));
+            // SAFETY: the preceding branch excludes len < 16. Both overlapping
+            // 16-byte loads fit in this 16..31-byte input; AVX2 is enabled.
+            let mut mask = mask32_overlap(lower, upper, haystack);
             if !REVERT {
-                // Convert the classifier's nonmember bits into member bits. This
-                // changes the predicate only; forward/reverse bit ordering is unchanged.
-                mask = !mask;
+                // Inversion sets out-of-input bits too. Clear them before
+                // choosing the highest match; 16 <= len < 32 bounds the shift.
+                // Nonmember flags already have these bits clear.
+                mask = !mask & ((1u32 << len) - 1);
             }
-            // Discard positions outside the actual input, including any padding
-            // whose zero byte happened to satisfy the selected predicate.
-            mask &= u32::MAX.checked_shr((32 - len) as u32).unwrap_or(0);
             return if mask != 0 {
                 // 31 - leading_zeros locates the highest set bit in this u32,
                 // which identifies the last selected byte lane.
@@ -226,6 +225,32 @@ unsafe fn rsearch<const REVERT: bool>(lower: __m128i, upper: __m128i, haystack: 
     }
 }
 
+/// Returns one nonmember bit per input byte, with higher bits clear.
+///
+/// # Safety
+/// The CPU must support AVX2, and `haystack` must contain 16 to 31 bytes.
+#[inline(always)]
+unsafe fn mask32_overlap(lower: __m128i, upper: __m128i, haystack: &[u8]) -> u32 {
+    // SAFETY: the caller establishes AVX2 support and 16 <= len < 32.
+    // Both unaligned loads read exactly sixteen initialized bytes, covering
+    // haystack[0..16] and haystack[len - 16..len] without crossing either bound.
+    unsafe {
+        let last = haystack.len() - 16;
+        let prefix = _mm_loadu_si128(haystack.as_ptr().cast());
+        let suffix = _mm_loadu_si128(haystack.as_ptr().add(last).cast());
+        // The cast places prefix in the lower 128 bits. Inserting suffix into
+        // lane 1 supplies the upper 128 bits, initializing all 32 byte lanes.
+        // For 31 bytes, their input positions are [0, ..., 15 | 15, ..., 30].
+        let bytes = _mm256_inserti128_si256::<1>(_mm256_castsi128_si256(prefix), suffix);
+        let mask = mask32(lower, upper, bytes);
+        // Bits 0..15 already refer to the prefix's original positions. Move
+        // the upper sixteen flags to the suffix's starting position, len - 16.
+        // Duplicate bytes have identical flags, so OR merges their results;
+        // the highest possible result bit is len - 1, with no padding bits.
+        (mask & 0b1111_1111_1111_1111) | ((mask >> 16) << last)
+    }
+}
+
 #[inline(always)]
 unsafe fn mask32(lower: __m128i, upper: __m128i, bytes: __m256i) -> u32 {
     // SAFETY: called only from an AVX2 entry point. pshufb zeros a lane
@@ -281,5 +306,102 @@ unsafe fn mask32(lower: __m128i, upper: __m128i, bytes: __m256i) -> u32 {
         // membership bits as 0b11111111 and present bits as 0b00000000. movemask packs
         // each byte's top bit into the corresponding scalar position bit.
         _mm256_movemask_epi8(_mm256_cmpeq_epi8(member, _mm256_setzero_si256())) as u32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{_mm_loadu_si128, mask32_overlap, rsearch, search};
+    use crate::{truffle::TruffleTable, SimdBackend};
+
+    #[test]
+    fn search_returns_len_when_the_overlapping_input_has_no_member() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'!'; 31];
+        for len in 16..=31 {
+            // SAFETY: AVX2 is available, the table loads cover complete arrays,
+            // and search handles each slice length with in-bounds loads.
+            let position = unsafe {
+                search::<false>(
+                    _mm_loadu_si128(table.lower().as_ptr().cast()),
+                    _mm_loadu_si128(table.upper().as_ptr().cast()),
+                    &haystack[..len],
+                )
+            };
+            // No 'a' exists. The first set bit after inversion is the end sentinel.
+            assert_eq!(position, len);
+        }
+    }
+
+    #[test]
+    fn rsearch_excludes_bits_past_the_overlapping_input() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'a'; 31];
+        for len in 16..=31 {
+            // SAFETY: AVX2 is available, both arrays contain sixteen entries,
+            // and rsearch handles the input length before its vector loads.
+            let position = unsafe {
+                rsearch::<false>(
+                    _mm_loadu_si128(table.lower().as_ptr().cast()),
+                    _mm_loadu_si128(table.upper().as_ptr().cast()),
+                    &haystack[..len],
+                )
+            };
+            // Inversion must not make an out-of-input bit the last match.
+            assert_eq!(position, len - 1);
+        }
+    }
+
+    #[test]
+    fn mask32_overlap_preserves_each_nonmembers_position() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        // Vary the overlap from sixteen duplicate bytes down to one. Only '!'
+        // is a nonmember, so exactly its original position must be set.
+        for len in 16..=31 {
+            for position in 0..len {
+                let mut haystack = [b'a'; 31];
+                haystack[position] = b'!';
+                // SAFETY: AVX2 is available, both table loads cover complete
+                // arrays, and the classifier receives between 16 and 31 bytes.
+                let mask = unsafe {
+                    mask32_overlap(
+                        _mm_loadu_si128(table.lower().as_ptr().cast()),
+                        _mm_loadu_si128(table.upper().as_ptr().cast()),
+                        &haystack[..len],
+                    )
+                };
+                assert_eq!(mask, 1u32 << position, "len={len}, position={position}");
+            }
+        }
+    }
+
+    #[test]
+    fn mask32_overlap_clears_bits_past_the_input() {
+        if !SimdBackend::Avx2.is_available() {
+            return;
+        }
+        let table = TruffleTable::new(b"a");
+        let haystack = [b'!'; 31];
+        // SAFETY: AVX2 is available, both table arrays contain sixteen bytes,
+        // and this 31-byte input satisfies the overlapping load requirements.
+        let mask = unsafe {
+            mask32_overlap(
+                _mm_loadu_si128(table.lower().as_ptr().cast()),
+                _mm_loadu_si128(table.upper().as_ptr().cast()),
+                &haystack,
+            )
+        };
+        // All 31 input bytes are nonmembers. Suffix flags move from SIMD lanes
+        // 16..31 to input positions 15..30, leaving result bit 31 clear.
+        assert_eq!(mask, 0b0111_1111_1111_1111_1111_1111_1111_1111);
     }
 }
