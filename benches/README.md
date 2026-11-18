@@ -1,10 +1,9 @@
 # Scan benchmark
 
 Compare the public Shufti and Truffle engine interfaces with the
-original Hyperscan Shufti and Truffle searches. Like
-[leftover's reader benchmark](https://github.com/WangLabCSU/leftover/tree/main/benches),
-this runner verifies results, warms up, rotates method order, and prints a
-comparison table. Each backend has its own table: algorithms are rows,
+original Hyperscan Shufti and Truffle searches. The runner verifies results,
+warms up, rotates method order, and prints a comparison table.
+Each backend has its own table: algorithms are rows,
 needle size, haystack length, and hit placement are columns alongside the
 bytesetscan and Hyperscan results. Find/rfind form separate groups.
 Each cell shows the median and observed minimum/maximum in

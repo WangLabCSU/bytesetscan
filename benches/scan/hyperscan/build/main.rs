@@ -24,8 +24,7 @@ fn main() {
         PathBuf::from(path)
     } else {
         let ragel = source::ragel(&cache);
-        // Use upstream's own targets and per-architecture compiler flags. No
-        // replacement CMake project or edits to its search kernels are needed.
+        // Use upstream's own targets and per-architecture compiler flags.
         let destination = cmake::Config::new(&source)
             // Let the upstream project provide the native compiler options.
             .no_default_flags(true)

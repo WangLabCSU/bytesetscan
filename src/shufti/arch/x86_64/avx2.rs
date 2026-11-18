@@ -55,7 +55,7 @@ unsafe fn search<const REVERT: bool>(
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // shuftiFwdShort / shuftiRevShort use two overlapping 16-byte reads.
+        // A sixteen-byte load at each end covers the entire 16..=32-byte slice.
         if len <= 32 {
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
             // The short path or scan bounds guarantee all sixteen are readable.
@@ -166,7 +166,7 @@ unsafe fn rsearch<const REVERT: bool>(
     unsafe {
         let ptr = haystack.as_ptr();
         let len = haystack.len();
-        // shuftiFwdShort / shuftiRevShort use two overlapping 16-byte reads.
+        // A sixteen-byte load at each end covers the entire 16..=32-byte slice.
         if len <= 32 {
             let last = len - 16;
             // Load sixteen consecutive bytes without assuming 16-byte alignment.
@@ -200,7 +200,8 @@ unsafe fn rsearch<const REVERT: bool>(
         // Subtract that remainder from len to round ptr + end down to a
         // 32-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (ptr.add(len) as usize & 0b00011111);
-        // The source compares buf_end with buf + 32 before decrementing.
+        // Stop before the next block would start at or before offset zero.
+        // The final unaligned load covers the remaining prefix.
         while end > 32 {
             end -= 32;
             // Read 32 bytes from the 32-byte-aligned interior address selected

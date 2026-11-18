@@ -152,7 +152,8 @@ unsafe fn rsearch128<const REVERT: bool>(
         // Subtract that remainder from len to round ptr + end down to a
         // 16-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (ptr.add(len) as usize & 0b00001111);
-        // The source compares buf_end with buf + 16 before decrementing.
+        // Stop before the next block would start at or before offset zero.
+        // The final unaligned load covers the remaining prefix.
         while end > 16 {
             end -= 16;
             // Load sixteen bytes from the 16-byte-aligned interior address;

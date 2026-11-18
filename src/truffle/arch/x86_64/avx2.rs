@@ -174,7 +174,8 @@ unsafe fn rsearch<const REVERT: bool>(
         // Subtract that remainder from len to round ptr + end down to a
         // 32-byte boundary. The initial suffix scan covered the skipped bytes.
         let mut end = len - (ptr.add(len) as usize & 0b00011111);
-        // The source compares buf_end with buf + 32 before decrementing.
+        // Stop before the next block would start at or before offset zero.
+        // The final unaligned load covers the remaining prefix.
         while end > 32 {
             end -= 32;
             // Read 32 bytes from the 32-byte-aligned interior address selected
