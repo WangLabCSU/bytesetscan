@@ -1,11 +1,11 @@
 // Automatic and explicitly configured searches share kernel selection.
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-mod x86_64;
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod wasm32;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+mod x86_64;
 
 use crate::backend::SimdBackend;
 

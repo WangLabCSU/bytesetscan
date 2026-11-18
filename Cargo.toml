@@ -3,10 +3,12 @@ name = "bytesetscan"
 version = "0.0.1"
 edition = "2021"
 rust-version = "1.89"
-description = "A high-performance Byte-set membership matching librar"
+description = "SIMD-accelerated byte-set matching with Shufti and Truffle"
 license = "MIT"
 readme = "README.md"
-include = ["src/**", "benches/**", "Cargo.toml", "README.md", "LICENSE"]
+repository = "https://github.com/WangLabCSU/bytesetscan"
+documentation = "https://docs.rs/bytesetscan"
+include = ["/src/**", "/Cargo.toml", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 keywords = ["shufti", "truffle", "simd", "search", "bytes"]
 categories = ["algorithms", "text-processing", "no-std"]
 
